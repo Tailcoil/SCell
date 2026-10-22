@@ -1,0 +1,18 @@
+[package]
+name = "scell-term"
+description = "终端状态机门面：VT 引擎、输入编码、渲染快照"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+alacritty_terminal.workspace = true
+parking_lot.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[lints]
+workspace = true

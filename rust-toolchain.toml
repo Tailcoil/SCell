@@ -1,0 +1,5 @@
+[toolchain]
+channel = "1.99.1"
+# 只装编译所需的组件，不下载文档，CI 上装得更快
+profile = "minimal"
+components = ["rustfmt", "clippy"]

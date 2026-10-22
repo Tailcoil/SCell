@@ -1,0 +1,102 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "xtask"]
+default-members = ["crates/scell"]
+# 补丁副本不是工作区成员，不受本项目的 lint 与格式化约束
+exclude = ["patches/gpui-component"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.99"
+license = "Apache-2.0"
+repository = "https://github.com/Tailcoil/scell"
+publish = false
+
+[workspace.dependencies]
+# 内部 crate
+scell-config = { path = "crates/scell-config" }
+scell-session = { path = "crates/scell-session" }
+scell-ssh = { path = "crates/scell-ssh" }
+scell-term = { path = "crates/scell-term" }
+scell-term-view = { path = "crates/scell-term-view" }
+scell-ui = { path = "crates/scell-ui" }
+scell-vfs = { path = "crates/scell-vfs" }
+
+# UI：gpui-kit 内部精确锁定 gpui-pre，升级需单独验证
+gpui-kit = "=0.8.0"
+
+# 终端与会话
+alacritty_terminal = "0.26"
+portable-pty = "0.9"
+encoding_rs = "0.8"
+sysinfo = { version = "0.31", default-features = false, features = ["system", "disk", "network"] }
+
+# 网络
+russh = { version = "0.64", default-features = false, features = ["ring", "rsa"] }
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "net", "io-util", "macros"] }
+tokio-util = "0.7"
+
+# 配置
+dirs = "7"
+notify = "8"
+serde_json = "1"
+keyring-core = "1"
+windows-native-keyring-store = "1"
+zbus-secret-service-keyring-store = { version = "1", features = ["crypto-rust"] }
+shlex = "1"
+ssh2-config = "0.8"
+tempfile = "3"
+toml = "1"
+toml_edit = "0.25"
+
+# 检查更新。ureq 与 velopack 共用，代理设置（含 SOCKS、Windows 系统代理）对两者都生效
+ureq = { version = "3", default-features = false, features = ["rustls", "socks-proxy"] }
+# Windows 安装与更新；打包用的 vpk 须与它同版本，release.yml 从 Cargo.lock 读取
+velopack = "1.2"
+
+# 通用
+anyhow = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+async-trait = "0.1"
+bytes = "1"
+clap = { version = "4", features = ["derive", "env"] }
+flume = "0.11"
+parking_lot = "0.12"
+rust-i18n = "4"
+serde = { version = "1", features = ["derive"] }
+sys-locale = "0.3"
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+unused_qualifications = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+dbg_macro = "warn"
+todo = "warn"
+unwrap_used = "warn"
+
+# GPUI 在 debug 下过慢：依赖开优化，自身 crate 保持快速增量编译
+[profile.dev.package."*"]
+opt-level = 2
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+
+# 性能测量用：接近 release 的优化，但编译更快、保留行号
+[profile.profiling]
+inherits = "release"
+lto = false
+codegen-units = 16
+debug = "line-tables-only"
+
+# gpui-component 0.8.0 的补丁副本：Linux 客户端装饰的窗口外框改为四角圆角（原版半径写死为 0），
+# 并导出 `window_corner_radii` 供模糊区域使用。改动处以“SCell 补丁”注释标出；升级 gpui-kit 时需要在新版上重做
+[patch.crates-io]
+gpui-component = { path = "patches/gpui-component" }

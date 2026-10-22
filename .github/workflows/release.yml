@@ -1,0 +1,140 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  APPIMAGETOOL_VERSION: 1.9.1
+  APPIMAGETOOL_SHA256: ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    container: debian:12
+    steps:
+      - name: 安装构建依赖
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            build-essential ca-certificates curl file git pkg-config rpm \
+            libfontconfig-dev libfreetype-dev libxkbcommon-dev libxkbcommon-x11-dev libxcb1-dev
+      - uses: actions/checkout@v7
+      - name: 安装 rustup
+        run: |
+          curl -fsSL https://sh.rustup.rs | sh -s -- -y --no-modify-path --profile minimal --default-toolchain none
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      # 版本取自 rust-toolchain.toml
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - name: 安装 cargo-about 与 appimagetool
+        run: |
+          cargo install --locked cargo-about --features cli
+          curl -fsSL -o /usr/local/bin/appimagetool \
+            "https://github.com/AppImage/appimagetool/releases/download/$APPIMAGETOOL_VERSION/appimagetool-x86_64.AppImage"
+          echo "$APPIMAGETOOL_SHA256  /usr/local/bin/appimagetool" | sha256sum -c -
+          chmod +x /usr/local/bin/appimagetool
+      - name: 打包
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: 1
+        run: cargo xtask dist --format archive,appimage,deb,rpm
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-linux
+          if-no-files-found: error
+          path: |
+            target/dist/*.tar.gz
+            target/dist/*.AppImage
+            target/dist/*.deb
+            target/dist/*.rpm
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      # 版本取自 rust-toolchain.toml
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - name: 安装 cargo-about 与 vpk
+        shell: bash
+        run: |
+          cargo install --locked cargo-about --features cli
+          # vpk 须与程序里的 velopack crate 同版本
+          version=$(grep -A1 '^name = "velopack"$' Cargo.lock | sed -n 's/^version = "\(.*\)"$/\1/p')
+          dotnet tool install --global vpk --version "$version"
+          cygpath -w "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+      - name: 打包
+        run: cargo xtask dist --format velopack
+      # 更新源按原名发布：程序从最新 Release 的 releases.win.json 找到 nupkg 再下载
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-windows
+          if-no-files-found: error
+          path: |
+            target/dist/*-setup.exe
+            target/dist/*-portable.zip
+            target/dist/*.nupkg
+            target/dist/releases.win.json
+
+  # 打成 pacman 包
+  # README 经 latest/download 直接链接
+  arch:
+    needs: linux
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - run: pacman -Syu --noconfirm --needed base-devel pacman-contrib
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist-linux
+          path: dist
+      - name: 打包
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)
+          useradd -m build
+          mkdir /build
+          cp packaging/aur/PKGBUILD "dist/scell-$version-x86_64-linux.tar.gz" /build/
+          sed -i "s/^pkgver=.*/pkgver=$version/" /build/PKGBUILD
+          chown -R build /build
+          su build -c 'cd /build && updpkgsums && makepkg --nodeps'
+          mkdir out
+          cp /build/scell-bin-*.pkg.tar.zst out/scell-bin-x86_64.pkg.tar.zst
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-arch
+          if-no-files-found: error
+          path: out/*.pkg.tar.zst
+
+  release:
+    needs: [linux, windows, arch]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+      - name: 校验和
+        working-directory: dist
+        run: sha256sum -- * > SHA256SUMS
+      - uses: softprops/action-gh-release@v3
+        with:
+          draft: true
+          files: dist/*
+
+  # Nix 用户从源码构建，这里只验证打标签的这份源码能用 flake 构建
+  nix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: cachix/install-nix-action@v31
+      - run: nix build -L
+      - run: ./result/bin/scell --version

@@ -1,0 +1,2 @@
+// magick -background none scell.svg -define icon:auto-resize=256,64,48,32,24,16 scell.ico
+1 ICON "../../assets/icons/scell.ico"

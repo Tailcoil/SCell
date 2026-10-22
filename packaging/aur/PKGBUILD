@@ -1,0 +1,22 @@
+# Maintainer: Tailcoil <110141765+Tailcoil@users.noreply.github.com>
+pkgname=scell-bin
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='More than fast: a clean, intuitive, all-in-one modern terminal'
+arch=('x86_64')
+url='https://github.com/Tailcoil/scell'
+license=('Apache-2.0')
+depends=('gcc-libs' 'glibc' 'hicolor-icon-theme' 'libxcb' 'libxkbcommon' 'libxkbcommon-x11' 'wayland' 'vulkan-icd-loader')
+provides=('scell')
+conflicts=('scell')
+options=('!strip' '!debug')
+source=("$url/releases/download/v$pkgver/scell-$pkgver-x86_64-linux.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+  cd "scell-$pkgver-x86_64-linux"
+  install -Dm755 scell -t "$pkgdir/usr/bin"
+  install -Dm644 scell.desktop -t "$pkgdir/usr/share/applications"
+  install -Dm644 scell.svg -t "$pkgdir/usr/share/icons/hicolor/scalable/apps"
+  install -Dm644 LICENSE THIRD-PARTY-LICENSES.html -t "$pkgdir/usr/share/licenses/$pkgname"
+}

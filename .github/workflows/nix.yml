@@ -1,0 +1,26 @@
+name: Nix
+
+# Nix 从源码构建，工具链、依赖或 flake 改动后验证一次
+on:
+  push:
+    branches: [main]
+    paths: [flake.nix, flake.lock, 'nix/**', rust-toolchain.toml, Cargo.lock]
+  pull_request:
+    paths: [flake.nix, flake.lock, 'nix/**', rust-toolchain.toml, Cargo.lock]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: cachix/install-nix-action@v31
+      - run: nix build -L
+      - run: ./result/bin/scell --version

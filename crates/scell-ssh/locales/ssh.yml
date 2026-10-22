@@ -1,0 +1,26 @@
+_version: 2
+error:
+  connect:
+    en: "Connection failed: %{err}"
+    zh-CN: "连接失败：%{err}"
+  protocol:
+    en: "SSH protocol error: %{err}"
+    zh-CN: "SSH 协议错误：%{err}"
+  host_key_rejected:
+    en: Host key not trusted
+    zh-CN: 主机密钥未被信任
+  known_hosts:
+    en: "Cannot read known hosts file: %{err}"
+    zh-CN: "无法读取主机密钥文件：%{err}"
+  auth_failed:
+    en: Authentication failed; every method was rejected
+    zh-CN: 认证失败，已尝试的方法均被拒绝
+  key:
+    en: "Cannot read private key: %{err}"
+    zh-CN: "读取私钥失败：%{err}"
+  agent:
+    en: "ssh-agent unavailable: %{err}"
+    zh-CN: "ssh-agent 不可用：%{err}"
+  cancelled:
+    en: Cancelled
+    zh-CN: 已取消

@@ -1,0 +1,14 @@
+_version: 2
+error:
+  watch:
+    en: "Cannot watch the configuration directory: %{err}"
+    zh-CN: "无法监听配置目录：%{err}"
+  no_keyring:
+    en: System keyring unavailable
+    zh-CN: 系统凭据库不可用
+  not_table:
+    en: "%{table} must be a table, such as [%{table}]"
+    zh-CN: "%{table} 必须是表，例如 [%{table}]"
+  color:
+    en: "Invalid color: %{value}"
+    zh-CN: "无效的颜色：%{value}"

@@ -1,0 +1,6 @@
+# Windows 检出默认转成 CRLF；probe.sh 编进程序后交给远端 sh 执行，带 \r 会出错
+* text=auto eol=lf
+
+*.ico binary
+*.png binary
+*.webp binary

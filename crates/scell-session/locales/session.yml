@@ -1,0 +1,56 @@
+_version: 2
+session:
+  spawn_failed:
+    en: "Cannot start session: %{err}"
+    zh-CN: "无法启动会话：%{err}"
+  closed:
+    en: Session closed
+    zh-CN: 会话已关闭
+  not_connected:
+    en: Not connected
+    zh-CN: 会话尚未连接
+  connection_lost:
+    en: Connection lost
+    zh-CN: 连接已断开
+  hop_failed:
+    en: "%{host}: %{err}"
+    zh-CN: "%{host}：%{err}"
+  no_user:
+    en: "%{host}: no user name set, and the local user name is unknown"
+    zh-CN: "%{host}：未设置用户名，也无法确定本机用户名"
+  host_key_changed:
+    en: "The host key of %{host} does not match the record in %{file}. Someone may be intercepting the connection."
+    zh-CN: "%{host} 的主机密钥与 %{file} 中的记录不一致，可能遭遇中间人攻击。"
+  current_key:
+    en: "Current key: %{fingerprint}"
+    zh-CN: "当前密钥：%{fingerprint}"
+  keyring_failed:
+    en: "Cannot save to the system keyring: %{err}"
+    zh-CN: "无法保存到系统凭据库：%{err}"
+  local_forwards:
+    en: Local sessions do not support port forwarding
+    zh-CN: 本地会话不支持端口转发
+sftp:
+  open_failed:
+    en: "Cannot open SFTP: %{err}"
+    zh-CN: "无法打开 SFTP：%{err}"
+  handshake_failed:
+    en: "SFTP handshake failed: %{err}"
+    zh-CN: "SFTP 握手失败：%{err}"
+forward:
+  start_failed:
+    en: "Port forward %{listen} not started: %{err}"
+    zh-CN: "端口转发 %{listen} 未能启动：%{err}"
+  bad_listen:
+    en: Invalid listen address
+    zh-CN: 监听地址无效
+  bad_target:
+    en: Invalid target address
+    zh-CN: 目标地址无效
+monitor:
+  start_failed:
+    en: "Cannot start monitoring: %{err}"
+    zh-CN: "无法启动监控：%{err}"
+  channel_closed:
+    en: Monitoring channel closed
+    zh-CN: 监控通道已关闭

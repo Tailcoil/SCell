@@ -1,0 +1,20 @@
+[Desktop Entry]
+Type=Application
+Name=SCell
+GenericName=Terminal
+GenericName[zh_CN]=终端
+Comment=More than fast: a clean, intuitive, all-in-one modern terminal
+Comment[zh_CN]=不止于快，简洁、直观的一站式现代化终端
+Exec=scell
+Icon=scell
+Terminal=false
+Categories=System;TerminalEmulator;Network;
+Keywords=terminal;shell;ssh;sftp;
+Keywords[zh_CN]=终端;命令行;ssh;sftp;
+StartupWMClass=scell
+Actions=new-window;
+
+[Desktop Action new-window]
+Name=New Window
+Name[zh_CN]=新建窗口
+Exec=scell

@@ -1,0 +1,26 @@
+_version: 2
+error:
+  not_found:
+    en: No such file or directory
+    zh-CN: 文件或目录不存在
+  permission_denied:
+    en: Permission denied
+    zh-CN: 权限不足
+  already_exists:
+    en: Already exists
+    zh-CN: 目标已存在
+  unsupported:
+    en: Operation not supported
+    zh-CN: 不支持该操作
+  connection_lost:
+    en: Connection lost
+    zh-CN: 连接已断开
+  protocol:
+    en: "SFTP protocol error: %{err}"
+    zh-CN: "SFTP 协议错误：%{err}"
+  status:
+    en: "SFTP error %{code}"
+    zh-CN: "SFTP 错误 %{code}"
+  unexpected_eof:
+    en: Unexpected end of file
+    zh-CN: 意外的文件结束

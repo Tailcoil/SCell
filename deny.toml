@@ -1,0 +1,53 @@
+# cargo-deny：依赖的许可证、安全公告与来源检查。CI 中运行 `cargo deny check`。
+
+[graph]
+all-features = false
+
+[advisories]
+# russh 等网络依赖出现过 CVE，公告一律视为错误
+yanked = "deny"
+# 无人维护的提醒只管直接依赖；间接依赖（多经锁定版本的 gpui 引入）由上游跟进
+unmaintained = "workspace"
+ignore = [
+    # rsa 的 Marvin 时序攻击，尚无修复版本（russh 支持 RSA 密钥需要）
+    # 攻击需大量观测私钥运算耗时，客户端只在认证时签名一两次。有修复版本后删除
+    { id = "RUSTSEC-2023-0071", reason = "无修复版本；客户端签名次数极少" },
+    # zip 8 解压时的 Unix 权限位与符号链接问题，修复在 zip 9。velopack 1.2 仍依赖 zip 8，
+    # 但只用 ZipArchive 逐条读取、写出单个文件，不调用受影响的 extract()，解压的也是校验过 SHA 的更新包
+    # velopack 升级到 zip 9 后删除
+    { id = "RUSTSEC-2026-0367", reason = "velopack 不调用受影响的 extract()" },
+    { id = "RUSTSEC-2026-0368", reason = "velopack 不调用受影响的 extract()" },
+    { id = "RUSTSEC-2026-0369", reason = "velopack 不调用受影响的 extract()" },
+]
+
+[licenses]
+# MPL-2.0 为文件级弱著佐权，以依赖形式使用与 Apache-2.0 兼容
+allow = [
+    "0BSD",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-1-Clause",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "CC0-1.0",
+    # webpki-roots 分发的 Mozilla 根证书数据（Windows 上 velopack 检查更新时用）
+    "CDLA-Permissive-2.0",
+    "ISC",
+    "MIT",
+    "MIT-0",
+    "MPL-2.0",
+    "Unicode-3.0",
+    "Unlicense",
+    "Zlib",
+]
+confidence-threshold = 0.9
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

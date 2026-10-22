@@ -1,0 +1,9 @@
+[alias]
+xtask = "run --package xtask --"
+
+# Windows 静态链接 MSVC 运行库
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.aarch64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

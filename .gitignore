@@ -1,0 +1,87 @@
+/target/
+**/*.rs.bk
+*.pdb
+**/mutants.out*/
+*.profraw
+*.profdata
+/coverage/
+lcov.info
+cobertura.xml
+tarpaulin-report.*
+perf.data
+perf.data.old
+flamegraph.svg
+callgrind.out.*
+massif.out.*
+heaptrack.*
+
+# Nix
+/result
+/result-*
+.direnv/
+
+# xtask
+*.AppImage
+*.deb
+*.rpm
+*.msi
+*.nupkg
+*.pkg.tar.*
+/packaging/*/src/
+/packaging/*/pkg/
+/packaging/*/*.tar.gz
+/packaging/*/.SRCINFO
+
+# Patch
+*.orig
+*.rej
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Tmp
+*.log
+*.tmp
+*.temp
+*.bak
+/.tmp/
+
+# IDE
+.idea/
+*.iml
+.fleet/
+.vscode/
+*.code-workspace
+.history/
+.zed/
+*.sublime-project
+*.sublime-workspace
+# Vim
+*.swp
+*.swo
+Session.vim
+.netrwhist
+# Emacs
+*~
+\#*\#
+.\#*
+
+# OS
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+# Windows
+Thumbs.db
+ehthumbs.db
+desktop.ini
+$RECYCLE.BIN/
+*.lnk
+# Linux
+.directory
+.fuse_hidden*
+.nfs*
+.Trash-*

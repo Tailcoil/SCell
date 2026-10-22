@@ -1,0 +1,715 @@
+_version: 2
+workspace:
+  sessions:
+    en: Sessions
+    zh-CN: 会话
+  new_tab:
+    en: New Tab
+    zh-CN: 新建标签
+  close_tab:
+    en: Close
+    zh-CN: 关闭
+  close_window:
+    en: Close Window
+    zh-CN: 关闭窗口
+  close_window_title:
+    en: Close this window?
+    zh-CN: 关闭此窗口？
+  close_window_detail:
+    en: "%{count} active connections will be disconnected."
+    zh-CN: "%{count} 条活跃连接将被断开。"
+  toggle_sidebar:
+    en: Toggle Sidebar
+    zh-CN: 切换侧栏
+  spawn_failed:
+    en: "Failed to start shell: %{error}"
+    zh-CN: "无法启动 Shell：%{error}"
+  toggle_panel:
+    en: Toggle Panel
+    zh-CN: 切换面板
+panel:
+  status:
+    en: Status
+    zh-CN: 状态
+find:
+  placeholder:
+    en: Find
+    zh-CN: 查找
+  case_sensitive:
+    en: Match Case
+    zh-CN: 区分大小写
+  regex:
+    en: Regular Expression
+    zh-CN: 正则表达式
+  older:
+    en: Previous Match
+    zh-CN: 上一个
+  newer:
+    en: Next Match
+    zh-CN: 下一个
+  close:
+    en: Close
+    zh-CN: 关闭
+tab:
+  exited_code:
+    en: "Exited with code %{code}"
+    zh-CN: "已退出，退出码 %{code}"
+  exited_signal:
+    en: Terminated
+    zh-CN: 已终止
+  restart:
+    en: Restart
+    zh-CN: 重新启动
+  rename:
+    en: Rename
+    zh-CN: 重命名
+  disconnected:
+    en: Disconnected
+    zh-CN: 连接已断开
+  retry_in:
+    en: "Disconnected · retrying in %{secs}s"
+    zh-CN: "连接已断开 · %{secs} 秒后重连"
+  reconnect:
+    en: Reconnect
+    zh-CN: 重新连接
+  idle:
+    en: Not connected
+    zh-CN: 未连接
+  move_to:
+    en: Move to Window
+    zh-CN: 移到窗口
+  new_window:
+    en: New Window
+    zh-CN: 新窗口
+palette:
+  placeholder:
+    en: Search commands, themes…
+    zh-CN: 搜索命令、主题…
+  commands:
+    en: Commands
+    zh-CN: 命令
+  split_right:
+    en: Split Right
+    zh-CN: 向右分屏
+  split_down:
+    en: Split Down
+    zh-CN: 向下分屏
+  close_pane:
+    en: Close Pane
+    zh-CN: 关闭窗格
+  close_tab:
+    en: Close Tab
+    zh-CN: 关闭标签
+  zoom:
+    en: Maximize Pane
+    zh-CN: 最大化窗格
+  quick_connect:
+    en: Connect to host…
+    zh-CN: 连接到主机…
+  new_window:
+    en: New Window
+    zh-CN: 新建窗口
+  move_to_new_window:
+    en: Move Tab to New Window
+    zh-CN: 将标签移到新窗口
+  next_tab:
+    en: Next Tab
+    zh-CN: 下一个标签
+  prev_tab:
+    en: Previous Tab
+    zh-CN: 上一个标签
+  rename_tab:
+    en: Rename Tab
+    zh-CN: 重命名标签
+  zoom_in:
+    en: Increase Font Size
+    zh-CN: 放大字号
+  zoom_out:
+    en: Decrease Font Size
+    zh-CN: 缩小字号
+  zoom_reset:
+    en: Reset Font Size
+    zh-CN: 还原字号
+  theme:
+    en: Theme
+    zh-CN: 主题
+  window:
+    en: Window Background
+    zh-CN: 窗口背景
+  material:
+    opaque:
+      en: Opaque
+      zh-CN: 不透明
+    translucent:
+      en: Translucent
+      zh-CN: 半透明
+    blur:
+      en: Blur
+      zh-CN: 模糊
+  config:
+    en: Configuration
+    zh-CN: 配置
+  open_settings:
+    en: Open Settings File
+    zh-CN: 打开设置文件
+  open_themes:
+    en: Open Themes Folder
+    zh-CN: 打开主题目录
+settings:
+  title:
+    en: Settings
+    zh-CN: 设置
+  appearance:
+    en: Appearance
+    zh-CN: 外观
+  theme:
+    en: Theme
+    zh-CN: 主题
+  language:
+    en: Language
+    zh-CN: 语言
+  follow_system:
+    en: Follow System
+    zh-CN: 跟随系统
+  window:
+    en: Window Background
+    zh-CN: 窗口背景
+  opacity:
+    en: Opacity
+    zh-CN: 不透明度
+  interface:
+    en: Interface
+    zh-CN: 界面
+  ui_font:
+    en: Interface Font
+    zh-CN: 界面字体
+  ui_font_size:
+    en: Interface Font Size
+    zh-CN: 界面字号
+  animations:
+    en: Animations
+    zh-CN: 过渡动画
+  terminal:
+    en: Terminal
+    zh-CN: 终端
+  font:
+    en: Font
+    zh-CN: 字体
+  font_family:
+    en: Font Family
+    zh-CN: 字体
+  font_size:
+    en: Font Size
+    zh-CN: 字号
+  line_height:
+    en: Line Height
+    zh-CN: 行高
+  fallbacks:
+    en: Fallback Fonts
+    zh-CN: 回退字体
+  cursor:
+    en: Cursor
+    zh-CN: 光标
+  cursor_shape:
+    en: Cursor Shape
+    zh-CN: 光标形状
+  cursor_blink:
+    en: Blinking Cursor
+    zh-CN: 光标闪烁
+  shape_block:
+    en: Block
+    zh-CN: 方块
+  shape_beam:
+    en: Beam
+    zh-CN: 竖线
+  shape_underline:
+    en: Underline
+    zh-CN: 下划线
+  behavior:
+    en: Behavior
+    zh-CN: 行为
+  scrollback:
+    en: Scrollback Lines
+    zh-CN: 回滚行数
+  copy_on_select:
+    en: Copy on Select
+    zh-CN: 选中即复制
+  confirm_multiline_paste:
+    en: Confirm Multi-line Paste
+    zh-CN: 多行粘贴前确认
+  shell:
+    en: Shell
+    zh-CN: Shell
+  program:
+    en: Program
+    zh-CN: 程序
+  args:
+    en: Arguments
+    zh-CN: 参数
+  system_default:
+    en: System default
+    zh-CN: 系统默认
+  auto_reconnect:
+    en: Reconnect Automatically
+    zh-CN: 断线自动重连
+  restore_session:
+    en: Restore Tabs on Startup
+    zh-CN: 启动时恢复标签
+  known_hosts:
+    en: Known Hosts File
+    zh-CN: 主机密钥文件
+  download_dir:
+    en: Download Folder
+    zh-CN: 下载目录
+  browse:
+    en: Browse…
+    zh-CN: 选择…
+  open_file:
+    en: Open settings.toml
+    zh-CN: 打开 settings.toml
+  about:
+    en: About
+    zh-CN: 关于
+  config_dir:
+    en: Configuration
+    zh-CN: 配置目录
+  logs_dir:
+    en: Logs
+    zh-CN: 日志目录
+  open_folder:
+    en: Open Folder
+    zh-CN: 打开目录
+  homepage:
+    en: Homepage
+    zh-CN: 项目主页
+  license:
+    en: License
+    zh-CN: 许可证
+  third_party:
+    en: Third-party Licenses
+    zh-CN: 第三方许可证
+  components:
+    en: "%{count} components"
+    zh-CN: "%{count} 个组件"
+  check_updates:
+    en: Check for Updates
+    zh-CN: 检查更新
+  checking_updates:
+    en: Checking…
+    zh-CN: 正在检查…
+  up_to_date:
+    en: Up to Date
+    zh-CN: 已是最新版本
+  update_to:
+    en: "Update to %{version}"
+    zh-CN: "更新到 %{version}"
+  download_version:
+    en: "Download %{version}"
+    zh-CN: "下载 %{version}"
+  downloading_update:
+    en: "Downloading %{percent}%"
+    zh-CN: "正在下载 %{percent}%"
+  restart_to_update:
+    en: Restart to Update
+    zh-CN: 重启以完成更新
+  update_failed:
+    en: "Update failed: %{err}"
+    zh-CN: "更新失败：%{err}"
+prompt:
+  new_host:
+    en: "Unknown host %{host}"
+    zh-CN: "未知主机 %{host}"
+  passphrase:
+    en: "Passphrase for %{key}"
+    zh-CN: "%{key} 的口令"
+  trust:
+    en: Trust and Connect
+    zh-CN: 信任并连接
+  ok:
+    en: OK
+    zh-CN: 确定
+  cancel:
+    en: Cancel
+    zh-CN: 取消
+  remember:
+    en: Remember
+    zh-CN: 记住
+  retry:
+    en: Incorrect, try again
+    zh-CN: 不正确，请重试
+hosts:
+  monitor:
+    en: Server Monitoring
+    zh-CN: 服务器监控
+  title:
+    en: Hosts
+    zh-CN: 主机
+  favorites:
+    en: Favorites
+    zh-CN: 收藏
+  recent:
+    en: Recent
+    zh-CN: 最近
+  ungrouped:
+    en: Ungrouped
+    zh-CN: 未分组
+  favorite:
+    en: Add to Favorites
+    zh-CN: 收藏
+  unfavorite:
+    en: Remove from Favorites
+    zh-CN: 取消收藏
+  tags:
+    en: Tags
+    zh-CN: 标签
+  missing:
+    en: Host no longer exists
+    zh-CN: 主机已不存在
+  bad_jump:
+    en: "Jump chain of %{name} references a missing host or loops"
+    zh-CN: "%{name} 的跳板引用了不存在的主机或形成循环"
+  add:
+    en: Add Host
+    zh-CN: 添加主机
+  delete:
+    en: Delete
+    zh-CN: 删除
+  connect:
+    en: Connect
+    zh-CN: 连接
+  edit:
+    en: Edit
+    zh-CN: 编辑
+  name:
+    en: Name
+    zh-CN: 名称
+  group:
+    en: Group
+    zh-CN: 分组
+  address:
+    en: Address
+    zh-CN: 地址
+  port:
+    en: Port
+    zh-CN: 端口
+  user:
+    en: User
+    zh-CN: 用户
+  auth:
+    en: Authentication
+    zh-CN: 认证
+  auth_auto:
+    en: Automatic
+    zh-CN: 自动
+  auth_agent:
+    en: Agent
+    zh-CN: Agent
+  auth_key:
+    en: Key
+    zh-CN: 密钥
+  auth_password:
+    en: Password
+    zh-CN: 密码
+  auth_interactive:
+    en: Interactive
+    zh-CN: 交互式
+  auth_custom:
+    en: Custom
+    zh-CN: 自定义
+  auth_order:
+    en: Order
+    zh-CN: 尝试顺序
+  key_path:
+    en: Key File
+    zh-CN: 私钥文件
+  jump:
+    en: Jump Host
+    zh-CN: 跳板机
+  direct:
+    en: Direct
+    zh-CN: 直连
+  icon:
+    en: Icon
+    zh-CN: 图标
+  color:
+    en: Color
+    zh-CN: 颜色
+  forwards:
+    en: Forwarding
+    zh-CN: 转发
+  general:
+    en: General
+    zh-CN: 通用
+  advanced:
+    en: Advanced
+    zh-CN: 高级
+  forward_local:
+    en: Local
+    zh-CN: 本地
+  forward_remote:
+    en: Remote
+    zh-CN: 远程
+  forward_dynamic:
+    en: SOCKS
+    zh-CN: SOCKS
+  forward_add:
+    en: Add Forward
+    zh-CN: 添加转发
+  none:
+    en: None
+    zh-CN: 无
+  encoding:
+    en: Encoding
+    zh-CN: 编码
+  notes:
+    en: Notes
+    zh-CN: 备注
+  save:
+    en: Save
+    zh-CN: 保存
+  revert:
+    en: Revert
+    zh-CN: 还原
+  search:
+    en: Search
+    zh-CN: 搜索
+  import:
+    en: Import from ~/.ssh/config
+    zh-CN: 从 ~/.ssh/config 导入
+  imported:
+    en: "Imported %{count} hosts"
+    zh-CN: "已导入 %{count} 台主机"
+  import_none:
+    en: No new hosts
+    zh-CN: 没有新的主机
+  connection:
+    en: Connection
+    zh-CN: 连接
+  other:
+    en: Other
+    zh-CN: 其他
+  empty:
+    en: No hosts
+    zh-CN: 暂无主机
+files:
+  title:
+    en: Files
+    zh-CN: 文件
+  closed:
+    en: Session closed
+    zh-CN: 会话已关闭
+  up:
+    en: Parent Folder
+    zh-CN: 上一级
+  refresh:
+    en: Refresh
+    zh-CN: 刷新
+  new_folder:
+    en: New Folder
+    zh-CN: 新建文件夹
+  show_hidden:
+    en: Show Hidden Files
+    zh-CN: 显示隐藏文件
+  name:
+    en: Name
+    zh-CN: 名称
+  size:
+    en: Size
+    zh-CN: 大小
+  modified:
+    en: Modified
+    zh-CN: 修改时间
+  open:
+    en: Open
+    zh-CN: 打开
+  rename:
+    en: Rename
+    zh-CN: 重命名
+  copy_path:
+    en: Copy Path
+    zh-CN: 复制路径
+  delete:
+    en: Delete
+    zh-CN: 删除
+  delete_one:
+    en: "Delete “%{name}”?"
+    zh-CN: "删除“%{name}”？"
+  delete_many:
+    en: "Delete %{count} items?"
+    zh-CN: "删除 %{count} 项？"
+  items:
+    en: "%{count} items"
+    zh-CN: "%{count} 项"
+  download:
+    en: Download
+    zh-CN: 下载
+  upload:
+    en: Upload
+    zh-CN: 上传
+  download_to:
+    en: Download To…
+    zh-CN: 下载到…
+  open_tab:
+    en: Open in SFTP Tab
+    zh-CN: 在 SFTP 标签页中打开
+  open_sftp:
+    en: Open SFTP
+    zh-CN: 打开 SFTP
+  connecting:
+    en: Connecting…
+    zh-CN: 正在连接…
+  local:
+    en: Local
+    zh-CN: 本机
+  upload_files:
+    en: Upload Files…
+    zh-CN: 上传文件…
+  retry:
+    en: Retry
+    zh-CN: 重试
+transfers:
+  panel:
+    en: Transfers Panel
+    zh-CN: 传输面板
+  title:
+    en: Transfers
+    zh-CN: 传输
+  clear:
+    en: Clear Finished
+    zh-CN: 清除已完成
+  queued:
+    en: Waiting
+    zh-CN: 等待中
+  paused:
+    en: Paused
+    zh-CN: 已暂停
+  skipped:
+    en: Skipped
+    zh-CN: 已跳过
+  cancelled:
+    en: Cancelled
+    zh-CN: 已取消
+  pause:
+    en: Pause
+    zh-CN: 暂停
+  continue:
+    en: Resume
+    zh-CN: 继续
+  cancel:
+    en: Cancel
+    zh-CN: 取消
+  retry:
+    en: Retry
+    zh-CN: 重试
+  remove:
+    en: Remove
+    zh-CN: 移除
+  conflict:
+    en: "“%{name}” already exists"
+    zh-CN: "“%{name}”已存在"
+  downloaded:
+    en: "Saved to %{dir}"
+    zh-CN: "已保存到 %{dir}"
+  unmappable:
+    en: "Skipped names that %{encoding} cannot represent: %{names}"
+    zh-CN: "已跳过 %{encoding} 无法表示的文件名：%{names}"
+  reveal:
+    en: Show in Folder
+    zh-CN: 打开所在文件夹
+  sizes:
+    en: "Existing %{existing} · Incoming %{incoming}"
+    zh-CN: "现有文件 %{existing} · 新文件 %{incoming}"
+  apply_all:
+    en: Apply to all conflicts in this transfer
+    zh-CN: 应用于本次传输的所有冲突
+  skip:
+    en: Skip
+    zh-CN: 跳过
+  keep_both:
+    en: Keep Both
+    zh-CN: 保留两者
+  resume:
+    en: Resume
+    zh-CN: 续传
+  overwrite:
+    en: Overwrite
+    zh-CN: 覆盖
+status:
+  waiting:
+    en: Collecting…
+    zh-CN: 正在采集…
+  unsupported:
+    en: "Monitoring is not supported on %{os}"
+    zh-CN: "不支持监控 %{os}"
+  disabled:
+    en: Monitoring is off for this host
+    zh-CN: 此主机已关闭监控
+  memory:
+    en: Memory
+    zh-CN: 内存
+  swap:
+    en: Swap
+    zh-CN: 交换
+  load:
+    en: Load
+    zh-CN: 负载
+  network:
+    en: Network
+    zh-CN: 网络
+  uptime:
+    en: Uptime
+    zh-CN: 运行时间
+  uptime_days:
+    en: "%{days} d %{hours} h"
+    zh-CN: "%{days} 天 %{hours} 小时"
+  uptime_hours:
+    en: "%{hours} h %{mins} min"
+    zh-CN: "%{hours} 小时 %{mins} 分"
+  disks:
+    en: Disks
+    zh-CN: 磁盘
+  processes:
+    en: Top Processes
+    zh-CN: 进程
+  process_name:
+    en: Name
+    zh-CN: 名称
+  command:
+    en: Command
+    zh-CN: 命令
+forwards:
+  ssh_only:
+    en: Available for SSH sessions
+    zh-CN: 仅 SSH 会话可用
+  listen:
+    en: Port
+    zh-CN: 端口
+  target:
+    en: host:port
+    zh-CN: 主机:端口
+  invalid:
+    en: Invalid port or target
+    zh-CN: 端口或目标地址无效
+  connections:
+    en: "%{count} connections"
+    zh-CN: "%{count} 个连接"
+  save:
+    en: Save to Host
+    zh-CN: 保存到主机配置
+  stop:
+    en: Stop
+    zh-CN: 停止
+paste:
+  title:
+    en: "Paste %{count} lines?"
+    zh-CN: "粘贴 %{count} 行内容？"
+  confirm:
+    en: Paste
+    zh-CN: 粘贴
+keys:
+  unknown:
+    en: "Unknown command in [keys]: %{name}"
+    zh-CN: "[keys] 中有未知命令：%{name}"
+  invalid:
+    en: "Invalid key in [keys]: %{name} = \"%{key}\""
+    zh-CN: "[keys] 中的按键无效：%{name} = \"%{key}\""

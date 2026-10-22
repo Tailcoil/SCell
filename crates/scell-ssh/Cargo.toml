@@ -1,0 +1,25 @@
+[package]
+name = "scell-ssh"
+description = "SSH 客户端：认证、跳板、通道与端口转发"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+rust-i18n.workspace = true
+russh.workspace = true
+tokio.workspace = true
+parking_lot.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+scell-vfs.workspace = true
+bytes.workspace = true
+tempfile.workspace = true

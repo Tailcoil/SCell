@@ -1,0 +1,40 @@
+[package]
+name = "scell-ui"
+description = "GPUI 表现层：工作区、面板、覆盖层"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+gpui-kit.workspace = true
+scell-term.workspace = true
+scell-term-view.workspace = true
+scell-session.workspace = true
+scell-config.workspace = true
+scell-vfs.workspace = true
+tracing.workspace = true
+chrono.workspace = true
+flume.workspace = true
+rust-i18n.workspace = true
+serde_json.workspace = true
+shlex.workspace = true
+sys-locale.workspace = true
+ureq.workspace = true
+
+[lints]
+workspace = true
+
+[target.'cfg(windows)'.dependencies]
+ureq = { workspace = true, features = ["win-system-proxy"] }
+velopack.workspace = true
+
+# 窗口模糊由 SCell 直接发 Wayland 请求，版本与 GPUI 所用的一致
+[target.'cfg(target_os = "linux")'.dependencies]
+raw-window-handle = "0.6"
+wayland-backend = { version = "0.3", features = ["client_system"] }
+wayland-client = "0.31"
+wayland-protocols = { version = "0.32", features = ["client", "staging"] }
+wayland-protocols-plasma = { version = "0.3", features = ["client"] }
