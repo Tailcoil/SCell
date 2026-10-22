@@ -595,12 +595,18 @@ fn automation_switch_user_and_sftp() {
         return;
     }
 
+    // xtask 在私钥旁的 bin/ 里放了假的 su、sudo。exec 通道经 sshd 的 SetEnv 拿到这个 PATH，
+    // 登录 shell 会被 /etc/profile 重设 PATH（如 Debian），要先自己 export
+    let bin = std::path::Path::new(key).parent().unwrap().join("bin");
     let mut profile = host("auto", addr, port, user, key);
     profile.automations = vec![
         Automation {
             name: "切换到运维管理员".into(),
             on_login: true,
             steps: vec![
+                Step::Send {
+                    text: format!("export PATH={}:$PATH", bin.display()),
+                },
                 Step::SwitchUser {
                     method: SwitchMethod::Su,
                     user: "opsroot".into(),

@@ -187,34 +187,15 @@ exec "$@"
 "#,
     )?;
 
-    let wrapper = dir.join("shell-wrapper");
-    write_exec(
-        &wrapper,
-        &format!(
-            r#"#!/bin/sh
-export PATH="{}:$PATH"
-if [ "$SSH_ORIGINAL_COMMAND" = "internal-sftp" ]; then
-    for p in /usr/lib/openssh/sftp-server /usr/libexec/openssh/sftp-server /usr/lib/ssh/sftp-server /usr/libexec/sftp-server /run/current-system/sw/libexec/sftp-server "$(command -v sftp-server 2>/dev/null)"; do
-        if [ -n "$p" ] && [ -x "$p" ]; then
-            exec "$p"
-        fi
-    done
-    exit 127
-elif [ -n "$SSH_ORIGINAL_COMMAND" ]; then
-    exec /bin/sh -c "$SSH_ORIGINAL_COMMAND"
-else
-    ENV="" PS1='$ ' exec /bin/sh -i
-fi
-"#,
-            bin.display()
-        ),
-    )?;
+    // 假的 su、sudo 经 SetEnv 放到 PATH 最前面。不用 ForceCommand 换 shell：会话保持用户自己的登录 shell，
+    // 其他测试的环境不变；登录 shell 可能被 /etc/profile 重设 PATH，用到时由测试自己 export
     let config = format!(
         "Port {port}\nListenAddress 127.0.0.1\nHostKey {d}/host_ed25519\n\
          AuthorizedKeysFile {d}/authorized_keys\nPidFile {d}/sshd.pid\nUsePAM no\n\
          StrictModes no\nPasswordAuthentication no\nKbdInteractiveAuthentication no\n\
-         ForceCommand {d}/shell-wrapper\n\
-         Subsystem sftp internal-sftp\n"
+         SetEnv PATH={}:/usr/local/bin:/usr/bin:/bin\n\
+         Subsystem sftp internal-sftp\n",
+        bin.display()
     );
     std::fs::write(dir.join("sshd_config"), config)?;
     run(Command::new(sshd_binary()?)
