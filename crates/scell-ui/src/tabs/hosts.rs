@@ -9,8 +9,8 @@ use gpui_kit::component::{
     v_flex,
 };
 use gpui_kit::{
-    AnyElement, App, AppContext, Context, Entity, EventEmitter, Hsla, InteractiveElement,
-    IntoElement, ParentElement, Render, SharedString, StatefulInteractiveElement, Styled,
+    AnyElement, App, AppContext, Context, Div, Entity, EventEmitter, Hsla, InteractiveElement,
+    IntoElement, ParentElement, Render, SharedString, Stateful, StatefulInteractiveElement, Styled,
     Subscription, WeakEntity, Window, div, prelude::FluentBuilder,
 };
 use rust_i18n::t;
@@ -20,8 +20,8 @@ use crate::config::{self, ConfigState};
 use crate::ui::form::{field, fields, grow, icon_button, icon_segmented, select, select_field};
 use crate::ui::metrics::{
     EDITOR_MAIN_MIN_WIDTH, EDITOR_SIDE_WIDTH, FORWARD_LISTEN_WIDTH, FORWARD_TARGET_BASIS,
-    HOST_FIELD_BASIS, HOSTS_SPLIT_MIN, LIST_ROW_TALL_HEIGHT, MASTER_LIST_WIDTH, PAGE_GUTTER,
-    PORT_WIDTH, SHEET_WIDTH,
+    HOST_FIELD_BASIS, HOSTS_SPLIT_MIN, LIST_ROW_HEIGHT, LIST_ROW_TALL_HEIGHT, MASTER_LIST_WIDTH,
+    PAGE_GUTTER, PORT_WIDTH, SHEET_WIDTH,
 };
 use crate::workspace::Workspace;
 use gpui_kit::component::tab::{Tab, TabBar};
@@ -86,20 +86,71 @@ pub(crate) fn host_icon(host: &HostProfile) -> Icon {
 
 pub(crate) enum HostEntry {
     Group(String),
-    Host(Box<HostProfile>),
+    /// `movable` 为假时不能拖动排序：收藏、最近使用里重复列出的行，以及搜索结果。
+    Host {
+        host: Box<HostProfile>,
+        movable: bool,
+    },
+}
+
+impl HostEntry {
+    fn host(host: &HostProfile, movable: bool) -> Self {
+        Self::Host {
+            host: Box::new(host.clone()),
+            movable,
+        }
+    }
+}
+
+/// 拖动中的主机。
+#[derive(Clone)]
+pub(crate) struct DraggedHost {
+    id: HostId,
+    name: SharedString,
+    icon: Icon,
+}
+
+impl Render for DraggedHost {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = cx.theme();
+        h_flex()
+            .h(LIST_ROW_HEIGHT)
+            .px_2()
+            .gap_2()
+            .rounded(theme.radius)
+            .bg(theme.popover)
+            .shadow_md()
+            .text_sm()
+            .text_color(theme.popover_foreground)
+            .child(self.icon.clone().small())
+            .child(self.name.clone())
+    }
+}
+
+/// 让一行主机可以拖动，并接受其他主机拖到它上面：拖到哪台主机上就放到它的位置。
+pub(crate) fn draggable(row: Stateful<Div>, host: &HostProfile) -> Stateful<Div> {
+    let drag = DraggedHost {
+        id: host.id.clone(),
+        name: host.name.clone().into(),
+        icon: host_icon(host),
+    };
+    let target = host.id.clone();
+    row.on_drag(drag, |drag, _, _, cx| cx.new(|_| drag.clone()))
+        .drag_over::<DraggedHost>(|s, _, _, cx| s.bg(cx.theme().drop_target))
+        .on_drop(move |dragged: &DraggedHost, _, cx| config::move_host(&dragged.id, &target, cx))
 }
 
 /// 侧栏顶部“最近”分组的长度。
 const RECENT_SHOWN: usize = 5;
 
-/// 主机列表的内容。有查询时按模糊匹配程度平铺；否则未分组的在前，其余按分组聚在一起并在组前插入组名，
-/// 组内保持主机库中的顺序。`pinned` 时在最前面加上“收藏”与“最近”两组（与下方的分组重复列出）。
+/// 主机列表的内容。有查询时按模糊匹配程度平铺；否则按主机库的显示顺序（未分组的在前，其余按分组聚在一起），
+/// 在组前插入组名。`pinned` 时在最前面加上“收藏”与“最近”两组（与下方的分组重复列出）。
 pub(crate) fn grouped(query: &str, pinned: bool, cx: &App) -> Vec<HostEntry> {
     let book = ConfigState::hosts(cx);
     if !query.trim().is_empty() {
         return scell_config::search_hosts(&book.hosts, query)
             .into_iter()
-            .map(|h| HostEntry::Host(Box::new(h.clone())))
+            .map(|h| HostEntry::host(h, false))
             .collect();
     }
     let mut entries = Vec::new();
@@ -107,11 +158,7 @@ pub(crate) fn grouped(query: &str, pinned: bool, cx: &App) -> Vec<HostEntry> {
         let favorites: Vec<&HostProfile> = book.hosts.iter().filter(|h| h.favorite).collect();
         if !favorites.is_empty() {
             entries.push(HostEntry::Group(label("favorites").into()));
-            entries.extend(
-                favorites
-                    .into_iter()
-                    .map(|h| HostEntry::Host(Box::new(h.clone()))),
-            );
+            entries.extend(favorites.into_iter().map(|h| HostEntry::host(h, false)));
         }
         let recent: Vec<&HostProfile> = ConfigState::recent_hosts(cx)
             .iter()
@@ -121,15 +168,10 @@ pub(crate) fn grouped(query: &str, pinned: bool, cx: &App) -> Vec<HostEntry> {
             .collect();
         if !recent.is_empty() {
             entries.push(HostEntry::Group(label("recent").into()));
-            entries.extend(
-                recent
-                    .into_iter()
-                    .map(|h| HostEntry::Host(Box::new(h.clone()))),
-            );
+            entries.extend(recent.into_iter().map(|h| HostEntry::host(h, false)));
         }
     }
-    let mut hosts: Vec<&HostProfile> = book.hosts.iter().collect();
-    hosts.sort_by(|a, b| a.group.cmp(&b.group));
+    let hosts = book.display_order();
     // 上面已有分组时，未分组的主机也要有个标题，否则看起来像属于上一组
     if !entries.is_empty() && hosts.first().is_some_and(|h| h.group.is_none()) {
         entries.push(HostEntry::Group(label("ungrouped").into()));
@@ -142,7 +184,7 @@ pub(crate) fn grouped(query: &str, pinned: bool, cx: &App) -> Vec<HostEntry> {
             let path: Vec<&str> = g.split('/').map(str::trim).collect();
             entries.push(HostEntry::Group(path.join(" / ")));
         }
-        entries.push(HostEntry::Host(Box::new(host.clone())));
+        entries.push(HostEntry::host(host, true));
     }
     entries
 }
@@ -254,12 +296,12 @@ impl HostsPane {
         let theme = cx.theme().clone();
         let mut items: Vec<AnyElement> = Vec::new();
         for entry in grouped(&query, false, cx) {
-            let host = match entry {
+            let (host, movable) = match entry {
                 HostEntry::Group(name) => {
                     items.push(group_heading(name, cx));
                     continue;
                 }
-                HostEntry::Host(host) => host,
+                HostEntry::Host { host, movable } => (host, movable),
             };
             let active = selected.as_ref() == Some(&host.id);
             let dot = host_color(&host);
@@ -293,6 +335,7 @@ impl HostsPane {
                             }
                         }),
                     )
+                    .when(movable, |row| draggable(row, &host))
                     .child(
                         div().flex_none().child(
                             host_icon(&host)

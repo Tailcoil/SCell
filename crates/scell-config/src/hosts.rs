@@ -227,6 +227,38 @@ impl HostBook {
         self.hosts.iter().find(|h| &h.id == id)
     }
 
+    /// 列表的显示顺序：未分组的在前，其余按分组名聚在一起，组内保持库中的顺序。
+    pub fn display_order(&self) -> Vec<&HostProfile> {
+        let mut hosts: Vec<&HostProfile> = self.hosts.iter().collect();
+        hosts.sort_by(|a, b| a.group.cmp(&b.group));
+        hosts
+    }
+
+    /// 拖动排序：把 `id` 放到 `target` 的位置并归入它的分组，返回是否有变化。
+    /// 与拖动标签一样按显示顺序先移走再插入，往下拖落在目标之后，往上拖落在目标之前；
+    /// 移动后库中的顺序即显示顺序。
+    pub fn move_host(&mut self, id: &HostId, target: &HostId) -> bool {
+        let mut order: Vec<usize> = (0..self.hosts.len()).collect();
+        order.sort_by(|&a, &b| self.hosts[a].group.cmp(&self.hosts[b].group));
+        let position = |id: &HostId| order.iter().position(|&i| &self.hosts[i].id == id);
+        let (Some(from), Some(to)) = (position(id), position(target)) else {
+            return false;
+        };
+        if from == to {
+            return false;
+        }
+        let group = self.hosts[order[to]].group.clone();
+        let moved = order.remove(from);
+        order.insert(to, moved);
+        self.hosts[moved].group = group;
+        let mut slots: Vec<Option<HostProfile>> = std::mem::take(&mut self.hosts)
+            .into_iter()
+            .map(Some)
+            .collect();
+        self.hosts = order.into_iter().filter_map(|i| slots[i].take()).collect();
+        true
+    }
+
     /// 新增或按 id 替换。
     pub fn upsert(&mut self, host: HostProfile) {
         match self.hosts.iter_mut().find(|h| h.id == host.id) {
@@ -388,5 +420,49 @@ mod tests {
         book.upsert(a3);
         book.remove(&a.id);
         assert!(book.get(&b.id).unwrap().jump.is_empty());
+    }
+
+    #[test]
+    fn move_host_follows_display_order() {
+        let mut book = HostBook::default();
+        let mut add = |name: &str, group: Option<&str>| {
+            let mut h = HostProfile::new(name, name);
+            h.id = HostId(name.into());
+            h.group = group.map(Into::into);
+            book.upsert(h);
+        };
+        // 库中顺序与显示顺序不同：显示为 u1 u2 | a1 a2 | b1 b2
+        add("b1", Some("b"));
+        add("a1", Some("a"));
+        add("u1", None);
+        add("a2", Some("a"));
+        add("b2", Some("b"));
+        add("u2", None);
+        let names = |book: &HostBook| -> Vec<String> {
+            let order: Vec<String> = book
+                .display_order()
+                .iter()
+                .map(|h| h.name.clone())
+                .collect();
+            let stored: Vec<String> = book.hosts.iter().map(|h| h.name.clone()).collect();
+            assert_eq!(order, stored, "移动后库中顺序即显示顺序");
+            order
+        };
+        let id = |s: &str| HostId(s.into());
+
+        // 往下拖到组内另一台上：落在它之后
+        assert!(book.move_host(&id("a1"), &id("a2")));
+        assert_eq!(names(&book), ["u1", "u2", "a2", "a1", "b1", "b2"]);
+        // 往上跨组拖：落在目标之前，并归入目标的分组
+        assert!(book.move_host(&id("b2"), &id("a2")));
+        assert_eq!(names(&book), ["u1", "u2", "b2", "a2", "a1", "b1"]);
+        assert_eq!(book.get(&id("b2")).unwrap().group.as_deref(), Some("a"));
+        // 往下跨组拖：落在目标之后
+        assert!(book.move_host(&id("u1"), &id("b1")));
+        assert_eq!(names(&book), ["u2", "b2", "a2", "a1", "b1", "u1"]);
+        assert_eq!(book.get(&id("u1")).unwrap().group.as_deref(), Some("b"));
+        // 拖回原处、目标不存在都不算变化
+        assert!(!book.move_host(&id("a1"), &id("a1")));
+        assert!(!book.move_host(&id("x"), &id("a1")));
     }
 }

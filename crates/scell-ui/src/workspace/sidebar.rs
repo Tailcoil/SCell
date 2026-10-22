@@ -20,7 +20,7 @@ use super::tab::{Launch, PaneStatus, TabId};
 use super::{Workspace, chrome};
 use crate::actions::{NewTab, OpenSettings, ToggleContextPanel, ToggleSidebar};
 use crate::config::{self, ConfigState};
-use crate::tabs::{HostEntry, group_heading, grouped, host_icon, open_host_sheet};
+use crate::tabs::{HostEntry, draggable, group_heading, grouped, host_icon, open_host_sheet};
 use crate::ui::metrics::{DOT, LIST_ROW_HEIGHT, SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_WIDTH};
 use crate::ui::motion;
 use scell_config::HostId;
@@ -333,12 +333,12 @@ fn host_rows(ws: &Workspace, cx: &mut Context<Workspace>) -> Vec<AnyElement> {
             .into_any_element(),
     ];
     for entry in grouped(&query, true, cx) {
-        let host = match entry {
+        let (host, movable) = match entry {
             HostEntry::Group(name) => {
                 rows.push(group_heading(name, cx));
                 continue;
             }
-            HostEntry::Host(host) => host,
+            HostEntry::Host { host, movable } => (host, movable),
         };
         let id = host.id.clone();
         let env = crate::tabs::host_color(&host);
@@ -348,7 +348,12 @@ fn host_rows(ws: &Workspace, cx: &mut Context<Workspace>) -> Vec<AnyElement> {
             .when_some(env, |i, c| i.text_color(c));
         let name: SharedString = host.name.clone().into();
         let row = h_flex()
-            .id(SharedString::from(format!("sidebar-host-{}", host.id.0)))
+            // 同一主机会在“收藏/最近”和所在分组各列一次，id 要区分开，否则两行共用点击状态
+            .id(SharedString::from(format!(
+                "sidebar-host-{}-{}",
+                if movable { "list" } else { "pinned" },
+                host.id.0
+            )))
             .w_full()
             .h(LIST_ROW_HEIGHT)
             .flex_none()
@@ -361,6 +366,7 @@ fn host_rows(ws: &Workspace, cx: &mut Context<Workspace>) -> Vec<AnyElement> {
                 let id = id.clone();
                 move |ws, _, window, cx| ws.open_host(&id, window, cx)
             }))
+            .when(movable, |row| draggable(row, &host))
             .child(div().flex_none().child(icon))
             .child(
                 div()
