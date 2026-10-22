@@ -11,6 +11,7 @@ provides=('scell')
 conflicts=('scell')
 options=('!strip' '!debug')
 source=("$url/releases/download/v$pkgver/scell-$pkgver-x86_64-linux.tar.gz")
+# 占位：CI 打包时由 updpkgsums 按本次构建的 tar.gz 填写；推到 AUR 前填 Release 里 SHA256SUMS 中的值
 sha256sums=('SKIP')
 
 package() {

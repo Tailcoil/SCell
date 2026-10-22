@@ -18,7 +18,18 @@ impl VfsPath {
         self.0
     }
 
-    /// 在末尾追加一级。`name` 不应含 `/`。
+    /// 能否作为一级名称拼到路径后面。目录列表里的名字来自远端，可能被构造成 `../x` 之类，
+    /// 不检查就拼接会写到目标目录之外。Windows 本机还会把 `\\` 当分隔符、把 `C:` 当盘符。
+    pub fn is_component(name: &[u8]) -> bool {
+        let separator = |c: &u8| match c {
+            b'/' | b'\0' => true,
+            b'\\' | b':' => cfg!(windows),
+            _ => false,
+        };
+        !name.is_empty() && name != b"." && name != b".." && !name.iter().any(separator)
+    }
+
+    /// 在末尾追加一级，`name` 须满足 [`Self::is_component`]。
     pub fn join(&self, name: &[u8]) -> Self {
         let mut bytes = self.0.clone();
         if !bytes.is_empty() && !bytes.ends_with(b"/") {
@@ -118,5 +129,16 @@ mod tests {
         let gbk = p("/srv").join(b"\xd6\xd0\xce\xc4.txt");
         assert_eq!(gbk.file_name(), Some(&b"\xd6\xd0\xce\xc4.txt"[..]));
         assert_eq!(format!("{gbk:?}"), r#""/srv/\xd6\xd0\xce\xc4.txt""#);
+    }
+
+    #[test]
+    fn rejects_names_that_escape_the_directory() {
+        assert!(VfsPath::is_component(b"a.txt"));
+        assert!(VfsPath::is_component(b"..a"));
+        for bad in [&b""[..], b".", b"..", b"../x", b"a/b", b"/etc", b"a\0b"] {
+            assert!(!VfsPath::is_component(bad), "{bad:?}");
+        }
+        assert_eq!(VfsPath::is_component(b"..\\x"), cfg!(not(windows)));
+        assert_eq!(VfsPath::is_component(b"C:x"), cfg!(not(windows)));
     }
 }

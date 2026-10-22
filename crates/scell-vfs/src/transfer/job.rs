@@ -160,6 +160,11 @@ impl Job {
             let mut entries = self.req.source.list(&dir).await?;
             entries.sort_by(|a, b| a.name.cmp(&b.name));
             for entry in entries {
+                // 列表已过滤过，这里再挡一次：任何 Vfs 实现给出的名字都不能把目标带出目标目录
+                if !VfsPath::is_component(&entry.name) {
+                    tracing::warn!(path = ?entry.path, "跳过无效的文件名");
+                    continue;
+                }
                 let mut child = rel.clone();
                 child.push(entry.name);
                 match entry.metadata.file_type() {
@@ -385,9 +390,10 @@ impl Job {
     }
 
     /// 保留权限与时间；失败只记日志（如目标文件系统不支持）。
+    /// 不带 setuid、setgid、sticky 位：来源可能是不可信的服务器。
     async fn preserve(&self, dst: &VfsPath, meta: &Metadata) {
         let attrs = Metadata {
-            permissions: meta.mode(),
+            permissions: meta.mode().map(|m| m & 0o777),
             accessed: meta.accessed,
             modified: meta.modified,
             ..Default::default()

@@ -183,6 +183,11 @@ fn enqueue(
             unmappable.push(display);
             continue;
         };
+        // 列表已过滤；转码后的名字也不能把目标带出目标目录
+        if !VfsPath::is_component(&name) {
+            tracing::warn!(name = ?VfsPath::new(name), "跳过无效的文件名");
+            continue;
+        }
         let dest_path = to_dir.join(&name);
         let meta = Meta {
             name: display.into(),

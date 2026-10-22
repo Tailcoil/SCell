@@ -353,7 +353,13 @@ impl Vfs for SftpClient {
                     entries.extend(
                         batch
                             .into_iter()
-                            .filter(|(name, _)| name != b"." && name != b"..")
+                            .filter(|(name, _)| {
+                                let ok = VfsPath::is_component(name);
+                                if !ok && name != b"." && name != b".." {
+                                    tracing::warn!(?dir, name = ?VfsPath::new(name.clone()), "忽略无效的文件名");
+                                }
+                                ok
+                            })
                             .map(|(name, metadata)| Entry {
                                 path: dir.join(&name),
                                 name,

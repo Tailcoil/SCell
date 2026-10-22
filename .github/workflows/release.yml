@@ -10,6 +10,9 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  # 发布产物在 linux 任务里构建，下载的工具都固定版本并校验 SHA-256
+  RUSTUP_VERSION: 1.29.2
+  RUSTUP_SHA256: 5be191e8c70a5007074254cb74d78dbfdd25cd5a61c27de7b8e5410122ec24f4
   APPIMAGETOOL_VERSION: 1.9.1
   APPIMAGETOOL_SHA256: ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
 
@@ -27,7 +30,11 @@ jobs:
       - uses: actions/checkout@v7
       - name: 安装 rustup
         run: |
-          curl -fsSL https://sh.rustup.rs | sh -s -- -y --no-modify-path --profile minimal --default-toolchain none
+          curl -fsSL -o /tmp/rustup-init \
+            "https://static.rust-lang.org/rustup/archive/$RUSTUP_VERSION/x86_64-unknown-linux-gnu/rustup-init"
+          echo "$RUSTUP_SHA256  /tmp/rustup-init" | sha256sum -c -
+          chmod +x /tmp/rustup-init
+          /tmp/rustup-init -y --no-modify-path --profile minimal --default-toolchain none
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
       # 版本取自 rust-toolchain.toml
       - run: rustup toolchain install
