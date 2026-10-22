@@ -19,14 +19,13 @@ impl VfsPath {
     }
 
     /// 能否作为一级名称拼到路径后面。目录列表里的名字来自远端，可能被构造成 `../x` 之类，
-    /// 不检查就拼接会写到目标目录之外。Windows 本机还会把 `\\` 当分隔符、把 `C:` 当盘符。
+    /// 不检查就拼接会写到目标目录之外。Windows 本机还会把 `\` 当分隔符、把 `C:` 当盘符。
     pub fn is_component(name: &[u8]) -> bool {
-        let separator = |c: &u8| match c {
-            b'/' | b'\0' => true,
-            b'\\' | b':' => cfg!(windows),
-            _ => false,
-        };
-        !name.is_empty() && name != b"." && name != b".." && !name.iter().any(separator)
+        const FORBIDDEN: &[u8] = if cfg!(windows) { b"/\0\\:" } else { b"/\0" };
+        !name.is_empty()
+            && name != b"."
+            && name != b".."
+            && !name.iter().any(|c| FORBIDDEN.contains(c))
     }
 
     /// 在末尾追加一级，`name` 须满足 [`Self::is_component`]。
