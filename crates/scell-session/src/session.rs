@@ -147,6 +147,13 @@ impl SessionHandle {
         self.shared.wakeup_pending.store(false, Ordering::Release);
     }
 
+    /// 在会话中按顺序执行一组自动操作步骤。
+    pub fn run_steps(&self, steps: Vec<scell_config::hosts::Step>) {
+        if !steps.is_empty() {
+            self.control.run_steps(steps);
+        }
+    }
+
     pub(crate) fn kill(&self) {
         self.control.kill();
     }

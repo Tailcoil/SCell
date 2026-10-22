@@ -455,6 +455,33 @@ hosts:
   forward_add:
     en: Add Forward
     zh-CN: 添加转发
+  automations:
+    en: Scripts
+    zh-CN: 脚本
+  automation_add:
+    en: Add Script
+    zh-CN: 添加脚本
+  automation_on_login:
+    en: Run on login
+    zh-CN: 登录时执行
+  step_add:
+    en: Add Step
+    zh-CN: 添加步骤
+  step_send:
+    en: Send
+    zh-CN: 发送命令
+  step_expect:
+    en: Expect
+    zh-CN: 等待输出
+  step_switch_user:
+    en: Switch User
+    zh-CN: 切换用户
+  step_wait:
+    en: Expected text
+    zh-CN: 期望文本
+  step_command:
+    en: Command
+    zh-CN: 命令
   none:
     en: None
     zh-CN: 无
@@ -677,6 +704,13 @@ status:
   command:
     en: Command
     zh-CN: 命令
+automations:
+  run:
+    en: Run
+    zh-CN: 执行
+  empty:
+    en: No scripts for this host
+    zh-CN: 这台主机没有脚本
 forwards:
   ssh_only:
     en: Available for SSH sessions

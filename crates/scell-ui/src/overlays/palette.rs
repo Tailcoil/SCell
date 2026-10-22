@@ -9,6 +9,7 @@ use gpui_kit::{
 };
 use rust_i18n::t;
 use scell_config::HostId;
+use scell_config::hosts::Step;
 use scell_config::settings::{ThemeChoice, WindowMaterial, spelling};
 
 use crate::actions::{
@@ -24,6 +25,7 @@ pub(crate) enum PaletteEvent {
     /// 用第几个 shell 配置档新建标签。
     OpenProfile(usize),
     ConnectHost(HostId),
+    RunSteps(Vec<Step>),
 }
 
 /// 只列主机的面板用于快速连接（Ctrl+Shift+O）。
@@ -36,6 +38,7 @@ pub(crate) enum PaletteMode {
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Section {
     Commands,
+    Automations,
     Hosts,
     Profiles,
     Themes,
@@ -46,6 +49,8 @@ enum Section {
 pub(crate) struct Palette {
     state: Entity<CommandState>,
     mode: PaletteMode,
+    /// 当前焦点 SSH 窗格所属的主机，用于展示该主机的自动操作。
+    active_host: Option<HostId>,
     /// 打开时的主题列表与主机顺序；主机行渲染时再去掉已删除的。
     themes: Vec<String>,
     hosts: Vec<HostId>,
@@ -54,27 +59,18 @@ pub(crate) struct Palette {
 impl EventEmitter<PaletteEvent> for Palette {}
 
 impl Palette {
-    pub(crate) fn new(mode: PaletteMode, window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub(crate) fn new(
+        mode: PaletteMode,
+        active_host: Option<HostId>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
         Self {
             state: cx.new(|cx| CommandState::new(window, cx)),
             mode,
+            active_host,
             themes: Appearance::themes(cx).0,
             hosts: config::host_order(cx),
-        }
-    }
-
-    /// 当前模式下各分组的顺序，即 `IndexPath::section` 的含义。
-    fn sections(&self) -> &'static [Section] {
-        match self.mode {
-            PaletteMode::All => &[
-                Section::Commands,
-                Section::Hosts,
-                Section::Profiles,
-                Section::Themes,
-                Section::Material,
-                Section::Config,
-            ],
-            PaletteMode::Hosts => &[Section::Hosts],
         }
     }
 
@@ -133,6 +129,20 @@ impl Render for Palette {
         ]);
         // 打开期间主机库可能变化：行与确认时取的 id 都来自这一份过滤后的列表
         let book = ConfigState::hosts(cx);
+        let automations_snapshot: Vec<_> = self
+            .active_host
+            .as_ref()
+            .and_then(|id| book.get(id))
+            .map(|h| h.automations.clone())
+            .unwrap_or_default();
+        let automations = CommandGroup::new().label(t!("hosts.automations")).items(
+            automations_snapshot.iter().map(|a| {
+                CommandItem::new()
+                    .label(a.name.clone())
+                    .icon(IconName::Play)
+                    .keywords(["script", "automation", "run", "脚本"])
+            }),
+        );
         let live_hosts: Vec<_> = self.hosts.iter().filter_map(|id| book.get(id)).collect();
         let hosts_snapshot: Vec<HostId> = live_hosts.iter().map(|h| h.id.clone()).collect();
         let hosts = CommandGroup::new()
@@ -185,11 +195,29 @@ impl Render for Palette {
         ]);
 
         let this = cx.entity().downgrade();
-        let sections = self.sections();
+        let mut sections = Vec::new();
+        match self.mode {
+            // 自动操作有副作用，不排在最前，打开面板后直接回车不会触发它
+            PaletteMode::All => {
+                sections.push(Section::Commands);
+                if !automations_snapshot.is_empty() {
+                    sections.push(Section::Automations);
+                }
+                sections.extend([
+                    Section::Hosts,
+                    Section::Profiles,
+                    Section::Themes,
+                    Section::Material,
+                    Section::Config,
+                ]);
+            }
+            PaletteMode::Hosts => sections.push(Section::Hosts),
+        }
         let themes_snapshot = self.themes.clone();
         let mut groups = Vec::new();
-        for section in sections {
+        for section in &sections {
             groups.push(match section {
+                Section::Automations => automations.clone(),
                 Section::Commands => commands.clone(),
                 Section::Hosts => hosts.clone(),
                 Section::Profiles => profiles.clone(),
@@ -220,6 +248,13 @@ impl Render for Palette {
                     )
                     .on_confirm(move |ix, _, cx| {
                         match sections.get(ix.section) {
+                            Some(Section::Automations) => {
+                                if let Some(a) = automations_snapshot.get(ix.row) {
+                                    let steps = a.steps.clone();
+                                    let _ = this
+                                        .update(cx, |_, cx| cx.emit(PaletteEvent::RunSteps(steps)));
+                                }
+                            }
                             Some(Section::Hosts) => {
                                 if let Some(id) = hosts_snapshot.get(ix.row).cloned() {
                                     let _ = this

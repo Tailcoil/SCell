@@ -190,6 +190,14 @@ pub(crate) fn update_hosts(mutate: impl FnOnce(&mut HostBook), cx: &mut App) {
     }
 }
 
+/// 拖动排序主机；落回原处时不写文件。
+pub(crate) fn move_host(id: &HostId, target: &HostId, cx: &mut App) {
+    let mut book = ConfigState::hosts(cx).clone();
+    if book.move_host(id, target) {
+        update_hosts(|hosts| *hosts = book, cx);
+    }
+}
+
 pub(crate) fn toggle_favorite(id: &HostId, cx: &mut App) {
     update_hosts(
         |book| {

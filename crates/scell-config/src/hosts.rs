@@ -81,6 +81,57 @@ impl ForwardRule {
     }
 }
 
+/// 一组按顺序执行的终端操作，可手动运行，也可在每次登录后自动运行。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Automation {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub on_login: bool,
+    #[serde(default, rename = "step")]
+    pub steps: Vec<Step>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+pub enum Step {
+    /// 发送一行（末尾自动回车）。
+    Send { text: String },
+    /// 等终端输出 `wait` 后发送 `send`；`send` 为空时只等待。
+    Expect {
+        wait: String,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        send: String,
+    },
+    /// 用 su 或 sudo 切换到 `user`，出现密码提示时填入密码。登录时执行的切换也用于这台主机的 SFTP。
+    SwitchUser {
+        method: SwitchMethod,
+        #[serde(default = "root", skip_serializing_if = "is_root")]
+        user: String,
+        /// 起登录 shell（`su -`、`sudo -i`）：加载目标用户的环境并进入其主目录；
+        /// 否则（`su`、`sudo -s`）沿用当前目录与环境。
+        #[serde(default = "yes", skip_serializing_if = "is_true")]
+        login: bool,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SwitchMethod {
+    /// 需要目标用户的密码。
+    #[default]
+    Su,
+    /// 需要登录用户自己的密码。
+    Sudo,
+}
+
+fn root() -> String {
+    "root".into()
+}
+
+fn is_root(user: &String) -> bool {
+    user == "root"
+}
+
 /// `端口`、`主机:端口` 或 `[IPv6]:端口`。
 pub fn parse_address(s: &str) -> Option<(Option<String>, u16)> {
     let s = s.trim();
@@ -141,6 +192,8 @@ pub struct HostProfile {
     /// 状态面板可见时在服务器上运行监控脚本。
     #[serde(default = "yes", skip_serializing_if = "is_true")]
     pub monitor: bool,
+    #[serde(default, rename = "automation", skip_serializing_if = "Vec::is_empty")]
+    pub automations: Vec<Automation>,
 }
 
 fn default_port() -> u16 {
@@ -174,7 +227,43 @@ impl HostProfile {
             encoding: None,
             notes: String::new(),
             monitor: true,
+            automations: Vec::new(),
         }
+    }
+
+    /// 登录时执行的第一个切换用户步骤；SFTP 以这个用户运行。
+    pub fn login_switch(&self) -> Option<(SwitchMethod, &str)> {
+        self.automations
+            .iter()
+            .filter(|a| a.on_login)
+            .flat_map(|a| &a.steps)
+            .find_map(|s| match s {
+                Step::SwitchUser { method, user, .. } => Some((*method, user.as_str())),
+                _ => None,
+            })
+    }
+
+    /// 切换用户时可能存进凭据库的用户密码所属的用户：su 的目标用户，用 sudo 时还有登录用户。
+    pub fn switch_users(&self) -> Vec<String> {
+        let mut users = Vec::new();
+        for step in self.automations.iter().flat_map(|a| &a.steps) {
+            let user = match step {
+                Step::SwitchUser {
+                    method: SwitchMethod::Su,
+                    user,
+                    ..
+                } => Some(user.clone()),
+                Step::SwitchUser {
+                    method: SwitchMethod::Sudo,
+                    ..
+                } => self.user.clone().or_else(crate::local_user),
+                _ => None,
+            };
+            if let Some(user) = user.filter(|u| !users.contains(u)) {
+                users.push(user);
+            }
+        }
+        users
     }
 
     /// `user@host:port` 形式的地址，端口为 22 时省略。
@@ -225,6 +314,38 @@ impl HostBook {
 
     pub fn get(&self, id: &HostId) -> Option<&HostProfile> {
         self.hosts.iter().find(|h| &h.id == id)
+    }
+
+    /// 列表的显示顺序：未分组的在前，其余按分组名聚在一起，组内保持库中的顺序。
+    pub fn display_order(&self) -> Vec<&HostProfile> {
+        let mut hosts: Vec<&HostProfile> = self.hosts.iter().collect();
+        hosts.sort_by(|a, b| a.group.cmp(&b.group));
+        hosts
+    }
+
+    /// 拖动排序：把 `id` 放到 `target` 的位置并归入它的分组，返回是否有变化。
+    /// 与拖动标签一样按显示顺序先移走再插入，往下拖落在目标之后，往上拖落在目标之前；
+    /// 移动后库中的顺序即显示顺序。
+    pub fn move_host(&mut self, id: &HostId, target: &HostId) -> bool {
+        let mut order: Vec<usize> = (0..self.hosts.len()).collect();
+        order.sort_by(|&a, &b| self.hosts[a].group.cmp(&self.hosts[b].group));
+        let position = |id: &HostId| order.iter().position(|&i| &self.hosts[i].id == id);
+        let (Some(from), Some(to)) = (position(id), position(target)) else {
+            return false;
+        };
+        if from == to {
+            return false;
+        }
+        let group = self.hosts[order[to]].group.clone();
+        let moved = order.remove(from);
+        order.insert(to, moved);
+        self.hosts[moved].group = group;
+        let mut slots: Vec<Option<HostProfile>> = std::mem::take(&mut self.hosts)
+            .into_iter()
+            .map(Some)
+            .collect();
+        self.hosts = order.into_iter().filter_map(|i| slots[i].take()).collect();
+        true
     }
 
     /// 新增或按 id 替换。
@@ -340,19 +461,90 @@ mod tests {
                 note: String::new(),
             },
         ];
+        b.automations = vec![Automation {
+            name: "root".into(),
+            on_login: true,
+            steps: vec![
+                Step::SwitchUser {
+                    method: SwitchMethod::Sudo,
+                    user: "root".into(),
+                    login: false,
+                },
+                Step::Expect {
+                    wait: "#".into(),
+                    send: String::new(),
+                },
+                Step::Send {
+                    text: "cd /srv".into(),
+                },
+            ],
+        }];
         book.upsert(a.clone());
         book.upsert(b.clone());
         book.save(&path).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.contains("[[host.automation.step]]"), "{text}");
+        assert!(
+            !text.contains("user = \"root\""),
+            "默认的 root 不写出：{text}"
+        );
+        assert!(text.contains("login = false"), "{text}");
 
         let loaded = HostBook::load(&path).unwrap();
         assert_eq!(loaded, book);
         assert_eq!(loaded.jump_chain(&b).unwrap()[0].name, "跳板");
         assert_eq!(b.address(), "10.0.0.2:2222");
         assert_eq!(a.address(), "ops@bastion.example");
+        assert_eq!(b.login_switch(), Some((SwitchMethod::Sudo, "root")));
+        assert_eq!(a.login_switch(), None);
 
         let minimal: HostBook =
             toml::from_str("[[host]]\nid = \"x\"\nname = \"n\"\nhost = \"h\"\n").unwrap();
         assert_eq!(minimal.hosts[0].port, 22);
+    }
+
+    #[test]
+    fn move_host_follows_display_order() {
+        let mut book = HostBook::default();
+        let mut add = |name: &str, group: Option<&str>| {
+            let mut h = HostProfile::new(name, name);
+            h.id = HostId(name.into());
+            h.group = group.map(Into::into);
+            book.upsert(h);
+        };
+        // 库中顺序与显示顺序不同：显示为 u1 u2 | a1 a2 | b1 b2
+        add("b1", Some("b"));
+        add("a1", Some("a"));
+        add("u1", None);
+        add("a2", Some("a"));
+        add("b2", Some("b"));
+        add("u2", None);
+        let names = |book: &HostBook| -> Vec<String> {
+            let order: Vec<String> = book
+                .display_order()
+                .iter()
+                .map(|h| h.name.clone())
+                .collect();
+            let stored: Vec<String> = book.hosts.iter().map(|h| h.name.clone()).collect();
+            assert_eq!(order, stored, "移动后库中顺序即显示顺序");
+            order
+        };
+        let id = |s: &str| HostId(s.into());
+
+        // 往下拖到组内另一台上：落在它之后
+        assert!(book.move_host(&id("a1"), &id("a2")));
+        assert_eq!(names(&book), ["u1", "u2", "a2", "a1", "b1", "b2"]);
+        // 往上跨组拖：落在目标之前，并归入目标的分组
+        assert!(book.move_host(&id("b2"), &id("a2")));
+        assert_eq!(names(&book), ["u1", "u2", "b2", "a2", "a1", "b1"]);
+        assert_eq!(book.get(&id("b2")).unwrap().group.as_deref(), Some("a"));
+        // 往下跨组拖：落在目标之后
+        assert!(book.move_host(&id("u1"), &id("b1")));
+        assert_eq!(names(&book), ["u2", "b2", "a2", "a1", "b1", "u1"]);
+        assert_eq!(book.get(&id("u1")).unwrap().group.as_deref(), Some("b"));
+        // 拖回原处、目标不存在都不算变化
+        assert!(!book.move_host(&id("a1"), &id("a1")));
+        assert!(!book.move_host(&id("x"), &id("a1")));
     }
 
     #[test]

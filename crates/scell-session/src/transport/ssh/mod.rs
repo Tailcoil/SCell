@@ -4,19 +4,20 @@
 //! 文件会话（[`SshMode::Files`]）走同一套连接、认证与重连流程，只是不开 shell：
 //! 连上后保持连接，供 SFTP 使用，终端不显示。
 
+mod auth;
+mod automation;
+
 use rust_i18n::t;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use parking_lot::Mutex;
-use scell_config::HostId;
-use scell_config::hosts::{AuthPref, ForwardRule, HostProfile};
-use scell_config::secrets::{self, SecretKey};
+use scell_config::hosts::{AuthPref, ForwardRule, HostProfile, Step};
 use scell_ssh::{
     AuthMethod, BoxFuture, ConnectParams, Connection, Endpoint, HostKeyStatus, HostKeyVerifier,
-    InteractiveRequest, KnownHostsFile, Prompter, PublicKey, ShellEvent,
+    KnownHostsFile, PublicKey, ShellEvent,
 };
 use scell_term::TermSize;
 use tokio::runtime::Handle;
@@ -29,6 +30,9 @@ use crate::prompt::{Prompt, PromptAnswer, PromptKind};
 use crate::pump::{Pump, notice};
 use crate::session::Shared;
 use crate::{Encoding, SessionEvent};
+pub(crate) use auth::SecretCache;
+use auth::{Hop, HopPrompter};
+use automation::{ShellIo, StepOutcome, open_switched_sftp};
 
 /// 要连接的主机，以及解析好的跳板链（最外层在前）。
 #[derive(Debug, Clone)]
@@ -77,9 +81,12 @@ pub(crate) struct SshEnv {
 struct SshControl {
     resize: mpsc::UnboundedSender<TermSize>,
     reconnect: mpsc::UnboundedSender<()>,
+    automate: mpsc::UnboundedSender<Vec<Step>>,
     task: Mutex<Option<tokio::task::AbortHandle>>,
     /// 当前 shell 所在的连接；未连上时为空。
     link: CurrentLink,
+    host: HostProfile,
+    ui: Arc<Interaction>,
     rt: Handle,
 }
 
@@ -153,29 +160,43 @@ impl TransportControl for SshControl {
             .is_some_and(|l| !l.conn.is_closed())
     }
 
-    /// 在当前连接上开 sftp 子系统，无需再次认证。SFTP 会话持有该连接，终端断开或关闭不影响它。
+    /// 在当前连接上开 SFTP：若主机配置了登录时切换用户，则通过 PTY 提权启动 sftp-server；
+    /// 否则直接开 sftp 子系统。SFTP 会话持有该连接，终端断开或关闭不影响它。
     fn open_vfs(&self) -> VfsReply {
         let (tx, rx) = tokio::sync::oneshot::channel();
         let Some(link) = self.link.lock().clone() else {
             let _ = tx.send(Err(t!("session.not_connected").into()));
             return rx;
         };
+        let host = self.host.clone();
+        let ui = self.ui.clone();
         self.rt.spawn(async move {
-            let result = async {
-                let stream = link
-                    .conn
-                    .open_subsystem("sftp")
+            let result = match host.login_switch() {
+                Some((method, user)) => open_switched_sftp(link, &host, &ui, method, user).await,
+                None => {
+                    async {
+                        let stream = link
+                            .conn
+                            .open_subsystem("sftp")
+                            .await
+                            .map_err(|e| t!("sftp.open_failed", err = e).into_owned())?;
+                        let client = scell_vfs::SftpClient::with_owner(stream, link)
+                            .await
+                            .map_err(|e| t!("sftp.handshake_failed", err = e).into_owned())?;
+                        Ok(Arc::new(client) as Arc<dyn scell_vfs::Vfs>)
+                    }
                     .await
-                    .map_err(|e| t!("sftp.open_failed", err = e).into_owned())?;
-                let client = scell_vfs::SftpClient::with_owner(stream, link)
-                    .await
-                    .map_err(|e| t!("sftp.handshake_failed", err = e).into_owned())?;
-                Ok(Arc::new(client) as Arc<dyn scell_vfs::Vfs>)
-            }
-            .await;
+                }
+            };
             let _ = tx.send(result);
         });
         rx
+    }
+
+    fn run_steps(&self, steps: Vec<Step>) {
+        if !steps.is_empty() {
+            let _ = self.automate.send(steps);
+        }
     }
 }
 
@@ -190,20 +211,24 @@ pub(crate) fn spawn_ssh(
 ) -> Arc<dyn TransportControl> {
     let (resize_tx, resize) = mpsc::unbounded_channel();
     let (reconnect_tx, reconnect) = mpsc::unbounded_channel();
+    let (automate_tx, automate) = mpsc::unbounded_channel();
     let link = CurrentLink::default();
-    let control = Arc::new(SshControl {
-        resize: resize_tx,
-        reconnect: reconnect_tx,
-        task: Mutex::new(None),
-        link: link.clone(),
-        rt: env.rt.clone(),
-    });
     let encoding = Encoding::of_label(target.host.encoding.as_deref());
     let ui = Arc::new(Interaction {
         shared: shared.clone(),
         known_hosts: KnownHostsFile {
             path: target.known_hosts.clone(),
         },
+    });
+    let control = Arc::new(SshControl {
+        resize: resize_tx,
+        reconnect: reconnect_tx,
+        automate: automate_tx,
+        task: Mutex::new(None),
+        link: link.clone(),
+        host: target.host.clone(),
+        ui: ui.clone(),
+        rt: env.rt.clone(),
     });
     let rt = env.rt.clone();
     let session = SshSession {
@@ -215,6 +240,7 @@ pub(crate) fn spawn_ssh(
         input,
         resize,
         reconnect,
+        automate,
         env,
         ui,
         encoding,
@@ -236,6 +262,7 @@ struct SshSession {
     input: flume::Receiver<Vec<u8>>,
     resize: mpsc::UnboundedReceiver<TermSize>,
     reconnect: mpsc::UnboundedReceiver<()>,
+    automate: mpsc::UnboundedReceiver<Vec<Step>>,
     env: SshEnv,
     ui: Arc<Interaction>,
     encoding: Encoding,
@@ -283,8 +310,9 @@ impl SshSession {
             return;
         }
         loop {
-            // 断开期间视图不接受输入，这里只丢弃断开那一刻还在途的字节
+            // 断开期间视图不接受输入，这里只丢弃断开那一刻还在途的字节与自动操作请求
             while self.input.try_recv().is_ok() {}
+            while self.automate.try_recv().is_ok() {}
             self.shared.emit(SessionEvent::Connecting(id));
             let ended = self.attempt(lead).await;
             lead = match ended {
@@ -393,21 +421,46 @@ impl SshSession {
         );
         let encoder = Encoder::new(self.encoding);
         let mut code = None;
-        loop {
-            tokio::select! {
-                event = shell.next_event() => match event {
-                    ShellEvent::Data(data) => pump.on_output(&data),
-                    ShellEvent::ExitStatus(c) => code = Some(c),
-                    ShellEvent::Closed => break,
-                },
-                Ok(bytes) = self.input.recv_async() => {
-                    if shell.write(&encoder.encode(bytes)).await.is_err() {
-                        break;
+
+        let mut io = ShellIo::new(&mut shell, &mut pump, &encoder, &mut code, self.encoding);
+        let login_steps: Vec<Step> = self
+            .target
+            .host
+            .automations
+            .iter()
+            .filter(|a| a.on_login)
+            .flat_map(|a| a.steps.iter().cloned())
+            .collect();
+        let closed = !login_steps.is_empty()
+            && self.execute_steps(&link, &mut io, &login_steps, true).await
+                == StepOutcome::ChannelClosed;
+
+        if !closed {
+            loop {
+                tokio::select! {
+                    event = io.shell.next_event() => match event {
+                        ShellEvent::Data(data) => io.pump.on_output(&data),
+                        ShellEvent::ExitStatus(c) => *io.code = Some(c),
+                        ShellEvent::Closed => break,
+                    },
+                    Ok(bytes) = self.input.recv_async() => {
+                        if io.shell.write(&io.encoder.encode(bytes)).await.is_err() {
+                            break;
+                        }
                     }
-                }
-                Some(s) = self.resize.recv() => {
-                    self.size = s;
-                    let _ = shell.resize(s.cols, s.rows).await;
+                    Some(s) = self.resize.recv() => {
+                        self.size = s;
+                        let _ = io.shell.resize(s.cols, s.rows).await;
+                    }
+                    Some(steps) = self.automate.recv() => {
+                        if self
+                            .execute_steps(&link, &mut io, &steps, false)
+                            .await
+                            == StepOutcome::ChannelClosed
+                        {
+                            break;
+                        }
+                    }
                 }
             }
         }
@@ -484,6 +537,13 @@ impl SshSession {
     }
 }
 
+fn resolved_user(host: &HostProfile) -> String {
+    host.user
+        .clone()
+        .or_else(scell_config::local_user)
+        .unwrap_or_default()
+}
+
 /// 逐跳建立连接，已在池中且存活的直接复用。返回目标主机这一跳，以及它是否为复用的。
 async fn connect_chain(
     target: &SshTarget,
@@ -518,7 +578,8 @@ async fn connect_hop(
     parent: Option<Arc<Link>>,
     ui: &Arc<Interaction>,
 ) -> Result<Arc<Link>, HopError> {
-    let prompter = HopPrompter::new(ui.clone(), hop.id.clone());
+    let secrets = SecretCache::default();
+    let prompter = HopPrompter(Hop::new(ui.clone(), hop.id.clone(), secrets.clone()));
     let params = connect_params(hop, prompter.clone());
     if params.user.is_empty() {
         return Err(HopError {
@@ -533,21 +594,19 @@ async fn connect_hop(
         Some(prev) => prev.conn.connect_via(&params, known_hosts, verifier).await,
     };
     let conn = result.map_err(|e| HopError::new(hop, &e))?;
-    prompter.commit(&ui.shared).await;
+    prompter.0.commit(&ui.shared).await;
     Ok(Arc::new(Link {
         conn,
         parent,
         forwards: Mutex::default(),
+        secrets,
+        switch_gate: tokio::sync::Mutex::new(()),
     }))
 }
 
 fn connect_params(host: &HostProfile, prompter: HopPrompter) -> ConnectParams {
     // 取不到本机用户名时留空，由 connect_hop 在连接前报错，不拿猜测的用户名去试（会计入 fail2ban）
-    let user = host
-        .user
-        .clone()
-        .or_else(scell_config::local_user)
-        .unwrap_or_default();
+    let user = resolved_user(host);
     let auth = if host.auth.is_empty() {
         default_auth()
     } else {
@@ -651,177 +710,6 @@ impl HostKeyVerifier for Interaction {
                     }
                     true
                 }
-            }
-        })
-    }
-}
-
-/// 一跳认证的提问方：优先使用凭据库中保存的密码与口令，错误时删除并改为询问；
-/// 用户勾选“记住”的输入在这一跳认证成功后才写入凭据库。
-#[derive(Clone)]
-struct HopPrompter(Arc<Hop>);
-
-struct Hop {
-    ui: Arc<Interaction>,
-    host: HostId,
-    state: Mutex<HopState>,
-}
-
-#[derive(Default)]
-struct HopState {
-    /// 已询问或已从凭据库取用的密码次数。
-    password_asks: usize,
-    password_from_store: bool,
-    /// 已询问过口令的私钥，以及其中取自凭据库的。
-    passphrase_asks: Vec<PathBuf>,
-    passphrase_from_store: Vec<PathBuf>,
-    /// 待认证成功后保存的机密。
-    pending: Vec<(Secret, String)>,
-}
-
-#[derive(Clone, PartialEq, Eq)]
-enum Secret {
-    Password(HostId),
-    Passphrase(PathBuf),
-}
-
-impl Secret {
-    fn key(&self) -> SecretKey<'_> {
-        match self {
-            Self::Password(id) => SecretKey::Password(id),
-            Self::Passphrase(path) => SecretKey::Passphrase(path),
-        }
-    }
-}
-
-/// 凭据库调用会阻塞，放到阻塞线程池。
-async fn blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> Option<T> {
-    tokio::task::spawn_blocking(f).await.ok()
-}
-
-impl HopPrompter {
-    fn new(ui: Arc<Interaction>, host: HostId) -> Self {
-        Self(Arc::new(Hop {
-            ui,
-            host,
-            state: Mutex::new(HopState::default()),
-        }))
-    }
-
-    async fn commit(&self, shared: &Arc<Shared>) {
-        self.0.commit(shared).await;
-    }
-}
-
-impl Hop {
-    /// 先取凭据库；取过且被用过一次（说明不正确）时删除它并询问用户。
-    async fn obtain(
-        self: Arc<Self>,
-        secret: Secret,
-        first: bool,
-        stale: bool,
-        ask: PromptKind,
-    ) -> Option<String> {
-        if stale {
-            let s = secret.clone();
-            blocking(move || secrets::delete(s.key())).await;
-        }
-        if first {
-            let s = secret.clone();
-            if let Some(Some(stored)) = blocking(move || secrets::get(s.key())).await {
-                let mut state = self.state.lock();
-                match &secret {
-                    Secret::Password(_) => state.password_from_store = true,
-                    Secret::Passphrase(path) => state.passphrase_from_store.push(path.clone()),
-                }
-                return Some(stored);
-            }
-        }
-        match self.ui.ask(ask).await {
-            PromptAnswer::Secret { value, remember } => {
-                let mut state = self.state.lock();
-                state.pending.retain(|(s, _)| *s != secret);
-                if remember {
-                    state.pending.push((secret, value.clone()));
-                }
-                Some(value)
-            }
-            _ => None,
-        }
-    }
-
-    /// 这一跳认证成功：写入用户要求记住的机密。
-    async fn commit(&self, shared: &Arc<Shared>) {
-        let pending = std::mem::take(&mut self.state.lock().pending);
-        for (secret, value) in pending {
-            let result = blocking(move || secrets::set(secret.key(), &value)).await;
-            if let Some(Err(e)) = result {
-                notice(
-                    shared,
-                    &format!(
-                        "\r\n\x1b[33m{}\x1b[0m\r\n",
-                        t!("session.keyring_failed", err = e)
-                    ),
-                );
-            }
-        }
-    }
-}
-
-impl Prompter for HopPrompter {
-    fn password(&self, user: &str, host: &str) -> BoxFuture<Option<String>> {
-        let (first, stale) = {
-            let mut state = self.0.state.lock();
-            state.password_asks += 1;
-            let stale = state.password_from_store;
-            state.password_from_store = false;
-            (state.password_asks == 1, stale)
-        };
-        let kind = PromptKind::Password {
-            user: user.to_owned(),
-            host: host.to_owned(),
-            retry: !first,
-        };
-        let secret = Secret::Password(self.0.host.clone());
-        Box::pin(self.0.clone().obtain(secret, first, stale, kind))
-    }
-
-    fn passphrase(&self, path: &Path) -> BoxFuture<Option<String>> {
-        let (first, stale) = {
-            let mut state = self.0.state.lock();
-            let first = !state.passphrase_asks.iter().any(|p| p == path);
-            state.passphrase_asks.push(path.to_owned());
-            let before = state.passphrase_from_store.len();
-            state.passphrase_from_store.retain(|p| p != path);
-            (first, state.passphrase_from_store.len() != before)
-        };
-        let kind = PromptKind::Passphrase {
-            path: path.to_owned(),
-            retry: !first,
-        };
-        let secret = Secret::Passphrase(path.to_owned());
-        Box::pin(self.0.clone().obtain(secret, first, stale, kind))
-    }
-
-    fn interactive(
-        &self,
-        user: &str,
-        host: &str,
-        request: InteractiveRequest,
-    ) -> BoxFuture<Option<Vec<String>>> {
-        let ui = self.0.ui.clone();
-        let count = request.prompts.len();
-        let kind = PromptKind::Interactive {
-            user: user.to_owned(),
-            host: host.to_owned(),
-            name: request.name,
-            instructions: request.instructions,
-            prompts: request.prompts,
-        };
-        Box::pin(async move {
-            match ui.ask(kind).await {
-                PromptAnswer::Responses(r) if r.len() == count => Some(r),
-                _ => None,
             }
         })
     }

@@ -409,6 +409,14 @@ impl Connection {
         Ok(ShellChannel::new(channel))
     }
 
+    /// 在 PTY 中执行命令，用于只从终端读密码的程序（如 su）。输出经 [`ShellChannel`] 读取。
+    pub async fn open_exec_pty(&self, command: &str) -> Result<ShellChannel, SshError> {
+        let channel = self.handle.channel_open_session().await?;
+        channel.request_pty(true, "dumb", 80, 24, 0, 0, &[]).await?;
+        channel.exec(true, command).await?;
+        Ok(ShellChannel::new(channel))
+    }
+
     /// 打开子系统通道（如 `sftp`），返回字节流供上层协议使用。
     pub async fn open_subsystem(&self, name: &str) -> Result<ChannelStream<Msg>, SshError> {
         let channel = self.handle.channel_open_session().await?;
