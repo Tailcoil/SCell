@@ -18,6 +18,8 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  # 不生成调试信息：带上时 clippy 加测试的产物约 10 GB，运行器磁盘写满后链接器以 SIGBUS 崩溃
+  CARGO_PROFILE_DEV_DEBUG: 0
 
 jobs:
   check:

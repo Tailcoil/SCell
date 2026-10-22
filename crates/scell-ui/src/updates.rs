@@ -37,7 +37,7 @@ pub(crate) struct Update {
 enum Target {
     /// Velopack 的更新包，在程序内下载安装。
     #[cfg_attr(not(windows), expect(dead_code, reason = "只有 Windows 版有更新包"))]
-    Package(platform::Package),
+    Package(Box<platform::Package>),
     /// Release 页面，交给浏览器。
     Page(String),
 }
@@ -222,7 +222,7 @@ mod platform {
         Ok(match check {
             UpdateCheck::UpdateAvailable(package) => Some(Update {
                 version: package.TargetFullRelease.Version.clone(),
-                target: Target::Package(*package),
+                target: Target::Package(package),
             }),
             UpdateCheck::NoUpdateAvailable | UpdateCheck::RemoteIsEmpty => None,
         })

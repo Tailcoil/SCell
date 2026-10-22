@@ -78,7 +78,10 @@ fn tree(root: &std::path::Path) {
         std::fs::write(root.join("a").join(gbk), "gbk").unwrap();
         std::os::unix::fs::symlink("top.txt", root.join("link")).unwrap();
     }
-    std::fs::File::open(root.join("top.txt"))
+    // Windows 上改时间需要写属性权限，只读打开会被拒绝
+    std::fs::File::options()
+        .write(true)
+        .open(root.join("top.txt"))
         .unwrap()
         .set_modified(std::time::UNIX_EPOCH + Duration::from_secs(1_500_000_000))
         .unwrap();

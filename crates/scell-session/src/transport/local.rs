@@ -44,6 +44,10 @@ pub struct LocalShell {
 struct LocalControl {
     master: Mutex<Box<dyn MasterPty + Send>>,
     killer: Mutex<Box<dyn ChildKiller + Send + Sync>>,
+    #[cfg_attr(
+        not(target_os = "linux"),
+        expect(dead_code, reason = "只有 Linux 能按 pid 读工作目录")
+    )]
     pid: Option<u32>,
     rt: Handle,
 }
