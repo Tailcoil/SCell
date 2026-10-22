@@ -577,3 +577,140 @@ fn host_forwards_follow_the_connection() {
     std::thread::sleep(Duration::from_millis(300));
     assert!(std::net::TcpStream::connect(("127.0.0.1", listen)).is_err());
 }
+
+/// 登录时自动 su 提权（含密码错误重试）、按序执行后续步骤，同一连接上打开提权 SFTP 复用已验证密码，
+/// 以及会话运行期间手动触发自动操作步骤。只针对 127.0.0.1 的 `cargo xtask it`。
+#[test]
+#[ignore = "需要 SCELL_SSH_IT 指向 127.0.0.1"]
+fn automation_switch_user_and_sftp() {
+    use scell_config::hosts::{Automation, Step, SwitchMethod};
+
+    let raw = std::env::var("SCELL_SSH_IT").expect("需要设置 SCELL_SSH_IT");
+    let parts: Vec<&str> = raw.splitn(5, ':').collect();
+    let [addr, port, user, key, _] = parts[..] else {
+        panic!("SCELL_SSH_IT 格式错误");
+    };
+    if addr != "127.0.0.1" {
+        eprintln!("只在本机 sshd 上运行，跳过");
+        return;
+    }
+
+    let mut profile = host("auto", addr, port, user, key);
+    profile.automations = vec![
+        Automation {
+            name: "切换到运维管理员".into(),
+            on_login: true,
+            steps: vec![
+                Step::SwitchUser {
+                    method: SwitchMethod::Su,
+                    user: "opsroot".into(),
+                    login: true,
+                },
+                Step::Expect {
+                    wait: "#".into(),
+                    send: "echo auto-switched-$SCELL_SWITCHED_USER".into(),
+                },
+                Step::Send {
+                    text: "echo login-step-done".into(),
+                },
+            ],
+        },
+        Automation {
+            name: "巡检".into(),
+            on_login: false,
+            steps: vec![Step::Send {
+                text: "echo manual-check-$((20+22))".into(),
+            }],
+        },
+    ];
+    assert_eq!(profile.login_switch(), Some((SwitchMethod::Su, "opsroot")));
+
+    let dir = tempfile::tempdir().unwrap();
+    let target = SshTarget {
+        host: profile.clone(),
+        jumps: Vec::new(),
+        known_hosts: dir.path().join("known_hosts"),
+    };
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let (service, events) = SessionService::new(rt.handle().clone());
+    let handle = service.spawn_ssh(target, TermSize::new(100, 24, 8, 16));
+
+    // 1. 信任主机密钥并等待连接建立
+    wait_connected(&events, &handle);
+
+    // 2. 登录自动执行 SwitchUser：第一次故意给错密码，验证触发 retry=true 的第二次询问
+    let first_pw = loop {
+        if let SessionEvent::Prompt(_, prompt) = events
+            .recv_timeout(Duration::from_secs(15))
+            .expect("等待首次 su 密码提问超时")
+        {
+            break prompt;
+        }
+    };
+    assert!(
+        matches!(
+            &first_pw.kind,
+            PromptKind::Password {
+                user,
+                retry: false,
+                ..
+            } if user == "opsroot"
+        ),
+        "预期首次询问 opsroot 密码，实际：{:?}",
+        first_pw.kind
+    );
+    first_pw.answer(PromptAnswer::Secret {
+        value: "wrong-password".into(),
+        remember: false,
+    });
+
+    let retry_pw = loop {
+        if let SessionEvent::Prompt(_, prompt) = events
+            .recv_timeout(Duration::from_secs(15))
+            .expect("等待重试 su 密码提问超时")
+        {
+            break prompt;
+        }
+    };
+    assert!(
+        matches!(
+            &retry_pw.kind,
+            PromptKind::Password {
+                user,
+                retry: true,
+                ..
+            } if user == "opsroot"
+        ),
+        "预期重试询问 opsroot 密码，实际：{:?}",
+        retry_pw.kind
+    );
+    retry_pw.answer(PromptAnswer::Secret {
+        value: "scell-su-pw".into(),
+        remember: false,
+    });
+
+    let wait_for = |needle: &str| {
+        let deadline = Instant::now() + Duration::from_secs(15);
+        while !screen(&handle).contains(needle) {
+            assert!(
+                Instant::now() < deadline,
+                "未出现 {needle}：\n{}",
+                screen(&handle)
+            );
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    };
+    wait_for("auto-switched-opsroot");
+    wait_for("login-step-done");
+
+    // 3. 打开提权 SFTP：应复用连接缓存中已验证通过的 opsroot 密码，不再弹窗询问
+    let vfs = rt.block_on(handle.open_vfs()).expect("打开提权 SFTP");
+    let home = rt.block_on(vfs.home()).unwrap();
+    assert!(!rt.block_on(vfs.list(&home)).unwrap().is_empty());
+
+    // 4. 手动触发第二组自动操作步骤
+    handle.run_steps(profile.automations[1].steps.clone());
+    wait_for("manual-check-42");
+
+    service.close(handle.id());
+}

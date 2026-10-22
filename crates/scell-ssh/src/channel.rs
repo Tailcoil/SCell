@@ -1,5 +1,5 @@
 use russh::client::Msg;
-use russh::{Channel, ChannelMsg};
+use russh::{Channel, ChannelMsg, ChannelStream};
 
 /// 交互式 shell 通道上的事件。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -55,5 +55,10 @@ impl ShellChannel {
             .window_change(cols as u32, rows as u32, 0, 0)
             .await
             .map_err(Into::into)
+    }
+
+    /// 转成字节流，交给上层协议（如在提权后的 sftp-server 上跑 SFTP）。之后到达的 stderr 被丢弃。
+    pub fn into_stream(self) -> ChannelStream<Msg> {
+        self.channel.into_stream()
     }
 }

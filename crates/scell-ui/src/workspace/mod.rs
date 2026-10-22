@@ -1450,13 +1450,35 @@ impl Workspace {
         cx.notify();
     }
 
+    /// 在指定标签的当前窗格中执行一组自动操作步骤。
+    fn run_tab_steps(&self, id: TabId, steps: Vec<scell_config::hosts::Step>) {
+        if let Some(pane) = self
+            .tabs
+            .iter()
+            .find(|t| t.id == id)
+            .and_then(Tab::terminals)
+            .and_then(Terminals::focused_pane)
+            .filter(|p| p.status == PaneStatus::Running)
+        {
+            pane.session.run_steps(steps);
+        }
+    }
+
     fn toggle_palette(&mut self, mode: PaletteMode, window: &mut Window, cx: &mut Context<Self>) {
         if self.palette.take().is_some() {
             self.restore_focus(window, cx);
             return;
         }
         self.sync_focused_pane(window, cx);
-        let palette = cx.new(|cx| Palette::new(mode, window, cx));
+        let active_host = self
+            .active_terminals()
+            .and_then(Terminals::focused_pane)
+            .filter(|p| p.status == PaneStatus::Running)
+            .and_then(|p| match &p.launch {
+                Launch::Ssh { host, .. } => Some(host.clone()),
+                Launch::Local(_) => None,
+            });
+        let palette = cx.new(|cx| Palette::new(mode, active_host, window, cx));
         let sub = cx.subscribe_in(&palette, window, |ws, _, event, window, cx| match event {
             PaletteEvent::Close => {
                 ws.palette = None;
@@ -1464,6 +1486,11 @@ impl Workspace {
             }
             PaletteEvent::OpenProfile(index) => ws.open_profile(*index, window, cx),
             PaletteEvent::ConnectHost(id) => ws.open_host(id, window, cx),
+            PaletteEvent::RunSteps(steps) => {
+                if let Some(id) = ws.tabs.get(ws.active).map(|t| t.id) {
+                    ws.run_tab_steps(id, steps.clone());
+                }
+            }
         });
         palette.update(cx, |p, cx| p.focus(window, cx));
         self.palette = Some((palette, sub));

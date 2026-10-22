@@ -14,6 +14,10 @@ pub(crate) struct Link {
     pub(crate) conn: Connection,
     pub(crate) parent: Option<Arc<Link>>,
     pub(crate) forwards: Mutex<Vec<crate::forwards::ActiveForward>>,
+    /// 本次连接期间已验证通过的密码（含未勾选“记住”的），供同一连接上的切换用户与提权 SFTP 复用。
+    pub(crate) secrets: crate::transport::SecretCache,
+    /// 串行化切换用户（终端登录切换与提权 SFTP），避免并发弹出同一个密码提示。
+    pub(crate) switch_gate: tokio::sync::Mutex<()>,
 }
 
 #[derive(Clone, Default)]

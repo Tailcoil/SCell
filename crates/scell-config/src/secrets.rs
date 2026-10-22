@@ -20,6 +20,9 @@ pub enum SecretKey<'a> {
     Password(&'a HostId),
     /// 某个加密私钥的口令，按文件路径区分，可被多台主机共用。
     Passphrase(&'a Path),
+    /// 主机上某个用户的密码：su 存目标用户的，sudo 存登录用户的。与 [`Self::Password`] 分开存放，
+    /// sudo 拒绝时清除这一条不会连带删掉 SSH 登录密码。
+    UserPassword(&'a HostId, &'a str),
 }
 
 impl SecretKey<'_> {
@@ -27,6 +30,7 @@ impl SecretKey<'_> {
         match self {
             Self::Password(id) => format!("password:{}", id.0),
             Self::Passphrase(path) => format!("passphrase:{}", path.display()),
+            Self::UserPassword(id, user) => format!("user-password:{}:{user}", id.0),
         }
     }
 }

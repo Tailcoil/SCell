@@ -11,10 +11,12 @@ use gpui_kit::component::{
 use gpui_kit::{
     AnyElement, App, AppContext, Context, Div, Entity, EventEmitter, Hsla, InteractiveElement,
     IntoElement, ParentElement, Render, SharedString, Stateful, StatefulInteractiveElement, Styled,
-    Subscription, WeakEntity, Window, div, prelude::FluentBuilder,
+    Subscription, WeakEntity, Window, div, prelude::FluentBuilder, px,
 };
 use rust_i18n::t;
-use scell_config::hosts::{AuthPref, ForwardKind, ForwardRule, HostId, HostProfile};
+use scell_config::hosts::{
+    AuthPref, Automation, ForwardKind, ForwardRule, HostId, HostProfile, Step, SwitchMethod,
+};
 
 use crate::config::{self, ConfigState};
 use crate::ui::form::{field, fields, grow, icon_button, icon_segmented, select, select_field};
@@ -526,11 +528,17 @@ impl AuthChoice {
 enum EditorTab {
     General,
     Forwards,
+    Automations,
     Advanced,
 }
 
 impl EditorTab {
-    const ALL: [Self; 3] = [Self::General, Self::Forwards, Self::Advanced];
+    const ALL: [Self; 4] = [
+        Self::General,
+        Self::Forwards,
+        Self::Automations,
+        Self::Advanced,
+    ];
 }
 
 pub(crate) enum HostEditorEvent {
@@ -551,6 +559,7 @@ pub(crate) struct HostEditor {
     key_path: Entity<InputState>,
     notes: Entity<TextareaState>,
     forwards: Vec<ForwardRow>,
+    automations: Vec<AutomationGroup>,
     tab: EditorTab,
     /// 左右两栏并排；由所在容器按宽度设置，否则上下排列。
     two_columns: bool,
@@ -619,6 +628,11 @@ impl HostEditor {
             .iter()
             .map(|rule| ForwardRow::new(Some(rule), window, cx))
             .collect();
+        let automations = profile
+            .automations
+            .iter()
+            .map(|auto| AutomationGroup::new(Some(auto), window, cx))
+            .collect();
         Self {
             id: profile.id.clone(),
             workspace,
@@ -631,6 +645,7 @@ impl HostEditor {
             key_path,
             notes,
             forwards,
+            automations,
             tab: EditorTab::General,
             two_columns: true,
             auth,
@@ -708,6 +723,54 @@ impl HostEditor {
             forwards.push(rule);
         }
         profile.forwards = forwards;
+        let mut automations = Vec::new();
+        for group in &self.automations {
+            let group_name = text(&group.name);
+            let mut steps = Vec::new();
+            for step in &group.steps {
+                let (primary, secondary) = (text(&step.primary), text(&step.secondary));
+                match step.kind {
+                    StepKind::Send => {
+                        if !primary.is_empty() {
+                            steps.push(Step::Send { text: primary });
+                        }
+                    }
+                    StepKind::Expect => {
+                        if !primary.is_empty() || !secondary.is_empty() {
+                            steps.push(Step::Expect {
+                                wait: primary,
+                                send: secondary,
+                            });
+                        }
+                    }
+                    StepKind::SwitchUser => {
+                        // 留空即占位符所示的 root
+                        let user = if primary.is_empty() {
+                            "root".to_owned()
+                        } else {
+                            primary
+                        };
+                        steps.push(Step::SwitchUser {
+                            method: step.method,
+                            user,
+                            login: step.login,
+                        });
+                    }
+                }
+            }
+            if group_name.is_empty() && steps.is_empty() {
+                continue;
+            }
+            if group_name.is_empty() || steps.is_empty() {
+                return None;
+            }
+            automations.push(Automation {
+                name: group_name,
+                on_login: group.on_login,
+                steps,
+            });
+        }
+        profile.automations = automations;
         profile.auth = match self.auth {
             AuthChoice::Auto => Vec::new(),
             AuthChoice::Agent => vec![AuthPref::Agent],
@@ -739,20 +802,28 @@ impl HostEditor {
         let Some(profile) = self.profile(cx) else {
             return;
         };
+        // 不再用到的切换用户密码随之清除
+        let kept = profile.switch_users();
+        let dropped: Vec<String> = self
+            .stored(cx)
+            .map(HostProfile::switch_users)
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|u| !kept.contains(u))
+            .collect();
         config::update_hosts(|book| book.upsert(profile), cx);
+        forget_secrets(self.id.clone(), false, dropped, cx);
         cx.emit(HostEditorEvent::Reopen(self.id.clone()));
     }
 
     fn delete(&mut self, cx: &mut Context<Self>) {
         let id = self.id.clone();
+        let users = self
+            .stored(cx)
+            .map(HostProfile::switch_users)
+            .unwrap_or_default();
         config::update_hosts(|book| book.remove(&id), cx);
-        // 凭据库调用会阻塞；没存过时不会触发解锁对话框
-        let secret = id.clone();
-        cx.background_executor()
-            .spawn(async move {
-                scell_config::secrets::delete(scell_config::secrets::SecretKey::Password(&secret))
-            })
-            .detach();
+        forget_secrets(id, true, users, cx);
         cx.emit(HostEditorEvent::Deleted);
     }
 
@@ -1009,6 +1080,7 @@ impl Render for HostEditor {
         let content = match self.tab {
             EditorTab::General => general,
             EditorTab::Forwards => self.forward_rows(update.clone(), cx),
+            EditorTab::Automations => self.automation_rows(update.clone(), cx),
             EditorTab::Advanced => vec![
                 field(label("encoding"), encoding).into_any_element(),
                 {
@@ -1031,30 +1103,29 @@ impl Render for HostEditor {
             ],
         };
 
-        // 转发分页的标签旁用徽标标出规则数，不切过去也知道配了没有
+        // 转发与自动操作分页的标签旁用徽标标出条目数，不切过去也知道配了没有
         let theme = cx.theme().clone();
-        let count = self.forwards.len();
+        let forwards_count = self.forwards.len();
+        let automations_count = self.automations.len();
         let tab = |t: EditorTab| {
-            let title = match t {
-                EditorTab::General => label("general"),
-                EditorTab::Forwards => label("forwards"),
-                EditorTab::Advanced => label("advanced"),
+            let (title, badge) = match t {
+                EditorTab::General => (label("general"), 0),
+                EditorTab::Forwards => (label("forwards"), forwards_count),
+                EditorTab::Automations => (label("automations"), automations_count),
+                EditorTab::Advanced => (label("advanced"), 0),
             };
-            Tab::new()
-                .label(title)
-                .mr_4()
-                .when(t == EditorTab::Forwards && count > 0, |tab| {
-                    tab.suffix(
-                        div()
-                            .ml_1()
-                            .px_1p5()
-                            .rounded_full()
-                            .bg(theme.secondary)
-                            .text_xs()
-                            .text_color(theme.muted_foreground)
-                            .child(count.to_string()),
-                    )
-                })
+            Tab::new().label(title).mr_4().when(badge > 0, |tab| {
+                tab.suffix(
+                    div()
+                        .ml_1()
+                        .px_1p5()
+                        .rounded_full()
+                        .bg(theme.secondary)
+                        .text_xs()
+                        .text_color(theme.muted_foreground)
+                        .child(badge.to_string()),
+                )
+            })
         };
         let tabs = TabBar::new("host-editor-tabs")
             .underline()
@@ -1154,9 +1225,339 @@ impl ForwardRow {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum StepKind {
+    Send,
+    Expect,
+    SwitchUser,
+}
+
+/// 编辑中的一条自动操作步骤。
+struct StepRow {
+    kind: StepKind,
+    method: SwitchMethod,
+    login: bool,
+    primary: Entity<InputState>,
+    secondary: Entity<InputState>,
+    _subscriptions: [Subscription; 2],
+}
+
+impl StepRow {
+    fn new(step: Option<&Step>, window: &mut Window, cx: &mut Context<HostEditor>) -> Self {
+        let (kind, method, p_val, s_val) = match step {
+            Some(Step::Send { text }) => (StepKind::Send, SwitchMethod::Su, text.as_str(), ""),
+            Some(Step::Expect { wait, send }) => (
+                StepKind::Expect,
+                SwitchMethod::Su,
+                wait.as_str(),
+                send.as_str(),
+            ),
+            Some(Step::SwitchUser { method, user, .. }) => {
+                (StepKind::SwitchUser, *method, user.as_str(), "")
+            }
+            None => (StepKind::Send, SwitchMethod::Su, "", ""),
+        };
+        let login = !matches!(step, Some(Step::SwitchUser { login: false, .. }));
+        let p_placeholder = match kind {
+            StepKind::Send => label("step_command"),
+            StepKind::Expect => label("step_wait"),
+            StepKind::SwitchUser => "root".into(),
+        };
+        let p_val = p_val.to_owned();
+        let s_val = s_val.to_owned();
+        let primary = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(p_placeholder)
+                .default_value(p_val)
+        });
+        let secondary = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(label("step_command"))
+                .default_value(s_val)
+        });
+        let notify = |cx: &mut Context<HostEditor>, input: &Entity<InputState>| {
+            cx.subscribe(input, |_, _, _: &InputEvent, cx| cx.notify())
+        };
+        Self {
+            kind,
+            method,
+            login,
+            _subscriptions: [notify(cx, &primary), notify(cx, &secondary)],
+            primary,
+            secondary,
+        }
+    }
+}
+
+/// 编辑中的一组自动操作。
+struct AutomationGroup {
+    name: Entity<InputState>,
+    on_login: bool,
+    steps: Vec<StepRow>,
+    _subscription: Subscription,
+}
+
+impl AutomationGroup {
+    fn new(auto: Option<&Automation>, window: &mut Window, cx: &mut Context<HostEditor>) -> Self {
+        let default_name = auto.map_or("", |a| &a.name).to_owned();
+        let name = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(label("name"))
+                .default_value(default_name)
+        });
+        let _subscription = cx.subscribe(&name, |_, _, _: &InputEvent, cx| cx.notify());
+        let steps = match auto {
+            Some(a) => a
+                .steps
+                .iter()
+                .map(|s| StepRow::new(Some(s), window, cx))
+                .collect(),
+            None => vec![StepRow::new(None, window, cx)],
+        };
+        Self {
+            name,
+            on_login: auto.is_none_or(|a| a.on_login),
+            steps,
+            _subscription,
+        }
+    }
+}
+
 type Update = std::rc::Rc<dyn Fn(Box<dyn FnOnce(&mut HostEditor)>, &mut App)>;
 
 impl HostEditor {
+    /// 自动操作：每组含名称、是否登录时执行、步骤列表，以及添加步骤/添加自动操作按钮。
+    fn automation_rows(&self, update: Update, cx: &mut Context<Self>) -> Vec<AnyElement> {
+        let step_kinds = vec![
+            (StepKind::Send, label("step_send")),
+            (StepKind::Expect, label("step_expect")),
+            (StepKind::SwitchUser, label("step_switch_user")),
+        ];
+        // 方式与是否登录 shell 合在一个下拉里，选项就是实际执行的命令
+        let switch_methods = vec![
+            ((SwitchMethod::Su, true), SharedString::from("su -")),
+            ((SwitchMethod::Su, false), SharedString::from("su")),
+            ((SwitchMethod::Sudo, true), SharedString::from("sudo -i")),
+            ((SwitchMethod::Sudo, false), SharedString::from("sudo -s")),
+        ];
+        let theme = cx.theme().clone();
+        let mut groups: Vec<AnyElement> = self
+            .automations
+            .iter()
+            .enumerate()
+            .map(|(gi, group)| {
+                let update_login = update.clone();
+                let header = h_flex()
+                    .items_center()
+                    .gap_3()
+                    .child(div().flex_1().child(Input::new(&group.name).small()))
+                    .child(
+                        h_flex()
+                            .items_center()
+                            .gap_1p5()
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(theme.muted_foreground)
+                                    .child(label("automation_on_login")),
+                            )
+                            .child(
+                                gpui_kit::component::switch::Switch::new(("auto-login", gi))
+                                    .small()
+                                    .checked(group.on_login)
+                                    .on_click(move |v: &bool, _, cx| {
+                                        let v = *v;
+                                        update_login(
+                                            Box::new(move |e| {
+                                                if let Some(g) = e.automations.get_mut(gi) {
+                                                    g.on_login = v;
+                                                }
+                                            }),
+                                            cx,
+                                        )
+                                    }),
+                            ),
+                    )
+                    .child(
+                        icon_button(
+                            ("auto-remove", gi),
+                            gpui_kit::assets::IconName::Trash,
+                            label("delete"),
+                        )
+                        .on_click(cx.listener(move |e, _, _, cx| {
+                            if gi < e.automations.len() {
+                                e.automations.remove(gi);
+                            }
+                            cx.notify();
+                        })),
+                    );
+
+                let steps: Vec<AnyElement> = group
+                    .steps
+                    .iter()
+                    .enumerate()
+                    .map(|(si, step)| {
+                        let row_id = gi * 1000 + si;
+                        let update_kind = update.clone();
+                        let primary_state = step.primary.clone();
+                        let kind = select(
+                            ("step-kind", row_id),
+                            step.kind,
+                            step_kinds.clone(),
+                            move |k, window, cx| {
+                                let placeholder = match k {
+                                    StepKind::Send => label("step_command"),
+                                    StepKind::Expect => label("step_wait"),
+                                    StepKind::SwitchUser => "root".into(),
+                                };
+                                primary_state.update(cx, |s, cx| {
+                                    s.set_placeholder(placeholder, window, cx);
+                                });
+                                update_kind(
+                                    Box::new(move |e| {
+                                        if let Some(s) = e
+                                            .automations
+                                            .get_mut(gi)
+                                            .and_then(|g| g.steps.get_mut(si))
+                                        {
+                                            s.kind = k;
+                                        }
+                                    }),
+                                    cx,
+                                );
+                            },
+                        );
+                        let mut cells = vec![kind.into_any_element()];
+                        match step.kind {
+                            StepKind::Send => {
+                                cells.push(
+                                    div()
+                                        .flex_1()
+                                        .child(Input::new(&step.primary).small())
+                                        .into_any_element(),
+                                );
+                            }
+                            StepKind::Expect => {
+                                cells.push(
+                                    div()
+                                        .flex_1()
+                                        .child(Input::new(&step.primary).small())
+                                        .into_any_element(),
+                                );
+                                cells.push(
+                                    Icon::new(IconName::ArrowRight)
+                                        .small()
+                                        .text_color(theme.muted_foreground)
+                                        .into_any_element(),
+                                );
+                                cells.push(
+                                    div()
+                                        .flex_1()
+                                        .child(Input::new(&step.secondary).small())
+                                        .into_any_element(),
+                                );
+                            }
+                            StepKind::SwitchUser => {
+                                let update_method = update.clone();
+                                let method = select(
+                                    ("step-method", row_id),
+                                    (step.method, step.login),
+                                    switch_methods.clone(),
+                                    move |(m, login), _, cx| {
+                                        update_method(
+                                            Box::new(move |e| {
+                                                if let Some(s) = e
+                                                    .automations
+                                                    .get_mut(gi)
+                                                    .and_then(|g| g.steps.get_mut(si))
+                                                {
+                                                    s.method = m;
+                                                    s.login = login;
+                                                }
+                                            }),
+                                            cx,
+                                        )
+                                    },
+                                );
+                                cells.push(method.into_any_element());
+                                cells.push(
+                                    div()
+                                        .flex_1()
+                                        .min_w(px(80.))
+                                        .child(Input::new(&step.primary).small())
+                                        .into_any_element(),
+                                );
+                            }
+                        }
+                        cells.push(
+                            icon_button(
+                                ("step-remove", row_id),
+                                gpui_kit::assets::IconName::Trash,
+                                label("delete"),
+                            )
+                            .on_click(cx.listener(move |e, _, _, cx| {
+                                if let Some(g) = e.automations.get_mut(gi)
+                                    && si < g.steps.len()
+                                {
+                                    g.steps.remove(si);
+                                }
+                                cx.notify();
+                            }))
+                            .into_any_element(),
+                        );
+                        h_flex()
+                            .items_center()
+                            .gap_2()
+                            .children(cells)
+                            .into_any_element()
+                    })
+                    .collect();
+
+                let add_step = Button::new(("step-add", gi))
+                    .ghost()
+                    .xsmall()
+                    .icon(IconName::Plus)
+                    .label(label("step_add"))
+                    .on_click(cx.listener(move |e, _, window, cx| {
+                        let row = StepRow::new(None, window, cx);
+                        if let Some(g) = e.automations.get_mut(gi) {
+                            g.steps.push(row);
+                        }
+                        cx.notify();
+                    }));
+
+                v_flex()
+                    .gap_2()
+                    .p_3()
+                    .rounded(theme.radius)
+                    .border_1()
+                    .border_color(theme.border)
+                    .child(header)
+                    .children(steps)
+                    .child(h_flex().child(add_step))
+                    .into_any_element()
+            })
+            .collect();
+
+        groups.push(
+            h_flex()
+                .child(
+                    Button::new("automation-add")
+                        .ghost()
+                        .small()
+                        .icon(IconName::Plus)
+                        .label(label("automation_add"))
+                        .on_click(cx.listener(|e, _, window, cx| {
+                            let group = AutomationGroup::new(None, window, cx);
+                            e.automations.push(group);
+                            cx.notify();
+                        })),
+                )
+                .into_any_element(),
+        );
+        groups
+    }
+
     /// 端口转发：每条一行（类型、监听、目标、删除），最后是“添加”。
     fn forward_rows(&self, update: Update, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let kinds = [
@@ -1332,4 +1733,23 @@ fn import_ssh_config(window: &mut Window, cx: &mut App) {
         Err(e) => Notification::error(e.to_string()),
     };
     window.push_notification(notification, cx);
+}
+
+/// 在后台删除凭据库里的主机机密：`login` 为真时含登录密码，另加 `users` 各自的切换用户密码。
+/// 凭据库调用会阻塞；没存过时不会触发解锁对话框。
+fn forget_secrets(id: HostId, login: bool, users: Vec<String>, cx: &mut App) {
+    use scell_config::secrets::{SecretKey, delete};
+    if !login && users.is_empty() {
+        return;
+    }
+    cx.background_executor()
+        .spawn(async move {
+            if login {
+                delete(SecretKey::Password(&id));
+            }
+            for user in &users {
+                delete(SecretKey::UserPassword(&id, user));
+            }
+        })
+        .detach();
 }

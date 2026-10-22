@@ -233,10 +233,16 @@ fn tab_row(
         });
 
     let workspace = cx.entity().downgrade();
-    let ssh = tab
+    let ssh_pane = tab
         .terminals()
         .and_then(|t| t.focused_pane())
-        .is_some_and(|p| matches!(p.launch, Launch::Ssh { .. }));
+        .and_then(|p| match &p.launch {
+            Launch::Ssh { host, .. } => Some((host.clone(), p.status == PaneStatus::Running)),
+            Launch::Local(_) => None,
+        });
+    let ssh = ssh_pane.is_some();
+    // 自动操作在菜单打开时才从主机库读取
+    let running_host = ssh_pane.and_then(|(host, running)| running.then_some(host));
     let window_handle = window.window_handle();
     let row = row.context_menu(move |menu, window, cx| {
         let others = crate::app::other_windows(window_handle, cx);
@@ -258,15 +264,37 @@ fn tab_row(
             })
         };
         let (sftp, rename, close) = (workspace.clone(), workspace.clone(), workspace.clone());
+        let auto_ws = workspace.clone();
+        let automations: Vec<_> = running_host
+            .as_ref()
+            .and_then(|host| ConfigState::hosts(cx).get(host))
+            .map(|h| {
+                h.automations
+                    .iter()
+                    .map(|a| (a.name.clone(), a.steps.clone()))
+                    .collect()
+            })
+            .unwrap_or_default();
         menu.when(ssh, |menu| {
-            menu.item(
+            let menu = menu.item(
                 PopupMenuItem::new(t!("files.open_sftp"))
                     .icon(Icon::new(gpui_kit::assets::IconName::Folders))
                     .on_click(move |_, window, cx| {
                         let _ = sftp.update(cx, |ws, cx| ws.open_tab_sftp(id, window, cx));
                     }),
-            )
-            .separator()
+            );
+            let menu = automations.into_iter().fold(menu, |menu, (name, steps)| {
+                let ws = auto_ws.clone();
+                menu.item(
+                    PopupMenuItem::new(name)
+                        .icon(Icon::new(IconName::Play))
+                        .on_click(move |_, _, cx| {
+                            let steps = steps.clone();
+                            let _ = ws.update(cx, |ws, _| ws.run_tab_steps(id, steps));
+                        }),
+                )
+            });
+            menu.separator()
         })
         .item(
             PopupMenuItem::new(t!("tab.rename")).on_click(move |_, window, cx| {

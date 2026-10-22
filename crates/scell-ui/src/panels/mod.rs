@@ -4,6 +4,7 @@
 //! 实现应只在目标变化时做事）；切到别的页或面板收起时收到 [`ContextItem::hide`]，应停止后台工作
 //! （监控探针、轮询）。会话事件广播给全部面板。
 
+mod automations;
 mod forwards;
 mod status;
 
@@ -18,6 +19,7 @@ use scell_session::{Encoding, SessionEvent, SessionHandle, SessionId};
 use scell_vfs::VfsPath;
 
 use crate::files::FilesPanel;
+use automations::AutomationsPanel;
 use forwards::ForwardsPanel;
 use status::StatusPanel;
 
@@ -96,6 +98,7 @@ impl ContextPanel {
             Box::new(cx.new(|_| StatusPanel::default())),
             Box::new(files.clone()),
             Box::new(cx.new(ForwardsPanel::new)),
+            Box::new(cx.new(|_| AutomationsPanel::default())),
         ];
         Self {
             items,

@@ -102,6 +102,16 @@ fn keygen(path: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
+fn write_exec(path: &Path, content: &str) -> anyhow::Result<()> {
+    std::fs::write(path, content)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755))?;
+    }
+    Ok(())
+}
+
 /// 返回测试所需的环境变量。
 fn sshd_up(port: u16) -> anyhow::Result<Vec<(&'static str, String)>> {
     let dir = state_dir();
@@ -122,10 +132,88 @@ fn sshd_up(port: u16) -> anyhow::Result<Vec<(&'static str, String)>> {
     }
 
     let d = dir.display();
+    let bin = dir.join("bin");
+    std::fs::create_dir_all(&bin)?;
+    write_exec(
+        &bin.join("su"),
+        r#"#!/bin/sh
+[ "$1" = "-" ] && shift
+user="$1"
+shift
+printf "Password: "
+stty -echo 2>/dev/null
+IFS= read -r pw
+stty echo 2>/dev/null
+printf "\n"
+if [ "$pw" != "scell-su-pw" ]; then
+    printf "su: Authentication failure\n" >&2
+    exit 1
+fi
+export SCELL_SWITCHED_USER="$user"
+if [ "$1" = "-c" ]; then
+    exec /bin/sh -c "$2"
+fi
+ENV="" PS1="switched-${user}# " exec /bin/sh -i
+"#,
+    )?;
+    write_exec(
+        &bin.join("sudo"),
+        r#"#!/bin/sh
+prompt="Password: "
+user="root"
+shell_mode=0
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -p) prompt="$2"; shift 2 ;;
+        -u) user="$2"; shift 2 ;;
+        -s|-i) shell_mode=1; shift ;;
+        *) break ;;
+    esac
+done
+printf "%s" "$prompt"
+stty -echo 2>/dev/null
+IFS= read -r pw
+stty echo 2>/dev/null
+printf "\n"
+if [ "$pw" != "scell-sudo-pw" ]; then
+    printf "Sorry, try again.\nsudo: 1 incorrect password attempt\n" >&2
+    exit 1
+fi
+export SCELL_SWITCHED_USER="$user"
+if [ "$shell_mode" = "1" ]; then
+    ENV="" PS1="switched-${user}# " exec /bin/sh -i
+fi
+exec "$@"
+"#,
+    )?;
+
+    let wrapper = dir.join("shell-wrapper");
+    write_exec(
+        &wrapper,
+        &format!(
+            r#"#!/bin/sh
+export PATH="{}:$PATH"
+if [ "$SSH_ORIGINAL_COMMAND" = "internal-sftp" ]; then
+    for p in /usr/lib/openssh/sftp-server /usr/libexec/openssh/sftp-server /usr/lib/ssh/sftp-server /usr/libexec/sftp-server /run/current-system/sw/libexec/sftp-server "$(command -v sftp-server 2>/dev/null)"; do
+        if [ -n "$p" ] && [ -x "$p" ]; then
+            exec "$p"
+        fi
+    done
+    exit 127
+elif [ -n "$SSH_ORIGINAL_COMMAND" ]; then
+    exec /bin/sh -c "$SSH_ORIGINAL_COMMAND"
+else
+    ENV="" PS1='$ ' exec /bin/sh -i
+fi
+"#,
+            bin.display()
+        ),
+    )?;
     let config = format!(
         "Port {port}\nListenAddress 127.0.0.1\nHostKey {d}/host_ed25519\n\
          AuthorizedKeysFile {d}/authorized_keys\nPidFile {d}/sshd.pid\nUsePAM no\n\
          StrictModes no\nPasswordAuthentication no\nKbdInteractiveAuthentication no\n\
+         ForceCommand {d}/shell-wrapper\n\
          Subsystem sftp internal-sftp\n"
     );
     std::fs::write(dir.join("sshd_config"), config)?;

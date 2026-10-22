@@ -81,6 +81,57 @@ impl ForwardRule {
     }
 }
 
+/// 一组按顺序执行的终端操作，可手动运行，也可在每次登录后自动运行。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Automation {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub on_login: bool,
+    #[serde(default, rename = "step")]
+    pub steps: Vec<Step>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+pub enum Step {
+    /// 发送一行（末尾自动回车）。
+    Send { text: String },
+    /// 等终端输出 `wait` 后发送 `send`；`send` 为空时只等待。
+    Expect {
+        wait: String,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        send: String,
+    },
+    /// 用 su 或 sudo 切换到 `user`，出现密码提示时填入密码。登录时执行的切换也用于这台主机的 SFTP。
+    SwitchUser {
+        method: SwitchMethod,
+        #[serde(default = "root", skip_serializing_if = "is_root")]
+        user: String,
+        /// 起登录 shell（`su -`、`sudo -i`）：加载目标用户的环境并进入其主目录；
+        /// 否则（`su`、`sudo -s`）沿用当前目录与环境。
+        #[serde(default = "yes", skip_serializing_if = "is_true")]
+        login: bool,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SwitchMethod {
+    /// 需要目标用户的密码。
+    #[default]
+    Su,
+    /// 需要登录用户自己的密码。
+    Sudo,
+}
+
+fn root() -> String {
+    "root".into()
+}
+
+fn is_root(user: &String) -> bool {
+    user == "root"
+}
+
 /// `端口`、`主机:端口` 或 `[IPv6]:端口`。
 pub fn parse_address(s: &str) -> Option<(Option<String>, u16)> {
     let s = s.trim();
@@ -141,6 +192,8 @@ pub struct HostProfile {
     /// 状态面板可见时在服务器上运行监控脚本。
     #[serde(default = "yes", skip_serializing_if = "is_true")]
     pub monitor: bool,
+    #[serde(default, rename = "automation", skip_serializing_if = "Vec::is_empty")]
+    pub automations: Vec<Automation>,
 }
 
 fn default_port() -> u16 {
@@ -174,7 +227,43 @@ impl HostProfile {
             encoding: None,
             notes: String::new(),
             monitor: true,
+            automations: Vec::new(),
         }
+    }
+
+    /// 登录时执行的第一个切换用户步骤；SFTP 以这个用户运行。
+    pub fn login_switch(&self) -> Option<(SwitchMethod, &str)> {
+        self.automations
+            .iter()
+            .filter(|a| a.on_login)
+            .flat_map(|a| &a.steps)
+            .find_map(|s| match s {
+                Step::SwitchUser { method, user, .. } => Some((*method, user.as_str())),
+                _ => None,
+            })
+    }
+
+    /// 切换用户时可能存进凭据库的用户密码所属的用户：su 的目标用户，用 sudo 时还有登录用户。
+    pub fn switch_users(&self) -> Vec<String> {
+        let mut users = Vec::new();
+        for step in self.automations.iter().flat_map(|a| &a.steps) {
+            let user = match step {
+                Step::SwitchUser {
+                    method: SwitchMethod::Su,
+                    user,
+                    ..
+                } => Some(user.clone()),
+                Step::SwitchUser {
+                    method: SwitchMethod::Sudo,
+                    ..
+                } => self.user.clone().or_else(crate::local_user),
+                _ => None,
+            };
+            if let Some(user) = user.filter(|u| !users.contains(u)) {
+                users.push(user);
+            }
+        }
+        users
     }
 
     /// `user@host:port` 形式的地址，端口为 22 时省略。
@@ -372,54 +461,46 @@ mod tests {
                 note: String::new(),
             },
         ];
+        b.automations = vec![Automation {
+            name: "root".into(),
+            on_login: true,
+            steps: vec![
+                Step::SwitchUser {
+                    method: SwitchMethod::Sudo,
+                    user: "root".into(),
+                    login: false,
+                },
+                Step::Expect {
+                    wait: "#".into(),
+                    send: String::new(),
+                },
+                Step::Send {
+                    text: "cd /srv".into(),
+                },
+            ],
+        }];
         book.upsert(a.clone());
         book.upsert(b.clone());
         book.save(&path).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.contains("[[host.automation.step]]"), "{text}");
+        assert!(
+            !text.contains("user = \"root\""),
+            "默认的 root 不写出：{text}"
+        );
+        assert!(text.contains("login = false"), "{text}");
 
         let loaded = HostBook::load(&path).unwrap();
         assert_eq!(loaded, book);
         assert_eq!(loaded.jump_chain(&b).unwrap()[0].name, "跳板");
         assert_eq!(b.address(), "10.0.0.2:2222");
         assert_eq!(a.address(), "ops@bastion.example");
+        assert_eq!(b.login_switch(), Some((SwitchMethod::Sudo, "root")));
+        assert_eq!(a.login_switch(), None);
 
         let minimal: HostBook =
             toml::from_str("[[host]]\nid = \"x\"\nname = \"n\"\nhost = \"h\"\n").unwrap();
         assert_eq!(minimal.hosts[0].port, 22);
-    }
-
-    #[test]
-    fn remove_cleans_jump_references_and_cycles_are_rejected() {
-        let mut book = HostBook::default();
-        let a = HostProfile::new("a", "a");
-        let mut b = HostProfile::new("b", "b");
-        b.jump = vec![a.id.clone()];
-        let mut c = HostProfile::new("c", "c");
-        c.jump = vec![c.id.clone()];
-        book.upsert(a.clone());
-        book.upsert(b.clone());
-        book.upsert(c.clone());
-        assert!(book.jump_chain(&c).is_err());
-        // 两层跳板：d 经 b，b 经 a
-        let mut d = HostProfile::new("d", "d");
-        d.jump = vec![b.id.clone()];
-        book.upsert(d.clone());
-        let names: Vec<&str> = book
-            .jump_chain(&d)
-            .unwrap()
-            .iter()
-            .map(|h| h.name.as_str())
-            .collect();
-        assert_eq!(names, ["a", "b"]);
-        // 间接成环：a 经 d
-        let mut a2 = a.clone();
-        a2.jump = vec![d.id.clone()];
-        book.upsert(a2);
-        assert!(book.jump_chain(&d).is_err());
-        let mut a3 = a.clone();
-        a3.jump.clear();
-        book.upsert(a3);
-        book.remove(&a.id);
-        assert!(book.get(&b.id).unwrap().jump.is_empty());
     }
 
     #[test]
@@ -464,5 +545,40 @@ mod tests {
         // 拖回原处、目标不存在都不算变化
         assert!(!book.move_host(&id("a1"), &id("a1")));
         assert!(!book.move_host(&id("x"), &id("a1")));
+    }
+
+    #[test]
+    fn remove_cleans_jump_references_and_cycles_are_rejected() {
+        let mut book = HostBook::default();
+        let a = HostProfile::new("a", "a");
+        let mut b = HostProfile::new("b", "b");
+        b.jump = vec![a.id.clone()];
+        let mut c = HostProfile::new("c", "c");
+        c.jump = vec![c.id.clone()];
+        book.upsert(a.clone());
+        book.upsert(b.clone());
+        book.upsert(c.clone());
+        assert!(book.jump_chain(&c).is_err());
+        // 两层跳板：d 经 b，b 经 a
+        let mut d = HostProfile::new("d", "d");
+        d.jump = vec![b.id.clone()];
+        book.upsert(d.clone());
+        let names: Vec<&str> = book
+            .jump_chain(&d)
+            .unwrap()
+            .iter()
+            .map(|h| h.name.as_str())
+            .collect();
+        assert_eq!(names, ["a", "b"]);
+        // 间接成环：a 经 d
+        let mut a2 = a.clone();
+        a2.jump = vec![d.id.clone()];
+        book.upsert(a2);
+        assert!(book.jump_chain(&d).is_err());
+        let mut a3 = a.clone();
+        a3.jump.clear();
+        book.upsert(a3);
+        book.remove(&a.id);
+        assert!(book.get(&b.id).unwrap().jump.is_empty());
     }
 }

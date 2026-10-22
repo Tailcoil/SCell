@@ -4,7 +4,7 @@ mod ssh;
 pub(crate) use local::spawn_local;
 pub use local::{LocalShell, hide_env_from_shells};
 pub use ssh::SshTarget;
-pub(crate) use ssh::{SshEnv, SshMode, spawn_ssh};
+pub(crate) use ssh::{SecretCache, SshEnv, SshMode, spawn_ssh};
 
 use std::sync::Arc;
 
@@ -59,4 +59,6 @@ pub(crate) trait TransportControl: Send + Sync {
     fn cwd(&self) -> Option<std::path::PathBuf> {
         None
     }
+    /// 在会话中按顺序执行一组自动操作步骤。
+    fn run_steps(&self, _steps: Vec<scell_config::hosts::Step>) {}
 }
