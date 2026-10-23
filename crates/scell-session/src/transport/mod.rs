@@ -45,6 +45,13 @@ pub(crate) trait TransportControl: Send + Sync {
 
     fn remove_forward(&self, _id: crate::ForwardId) {}
 
+    /// 测一次当前连接的往返时间；本地会话、未连上或超时时为 `None`。
+    fn ping(&self) -> oneshot::Receiver<Option<std::time::Duration>> {
+        let (tx, rx) = oneshot::channel();
+        let _ = tx.send(None);
+        rx
+    }
+
     /// 远程会话当前是否连着；本地会话始终为真。
     fn is_connected(&self) -> bool {
         true

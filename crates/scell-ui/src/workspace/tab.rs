@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use gpui_kit::component::input::InputState;
 use gpui_kit::component::{Icon, IconName};
@@ -99,6 +99,8 @@ pub(crate) struct Pane {
     /// 不可见时响过铃，聚焦后清除。
     pub(crate) bell: bool,
     pub(crate) prompt: Option<PanePrompt>,
+    /// 最近一次测得的连接往返时间，只有 SSH 窗格会有。
+    pub(crate) latency: Option<Duration>,
 }
 
 impl Pane {
@@ -119,6 +121,7 @@ impl Pane {
             osc_cwd: None,
             bell: false,
             prompt: None,
+            latency: None,
         }
     }
 }

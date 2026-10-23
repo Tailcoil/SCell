@@ -553,6 +553,9 @@ fn shell(window: &mut Window, cx: &mut App) -> Vec<AnyElement> {
     let auto_reconnect = switch("ssh", "auto_reconnect", ssh.auto_reconnect, |s, v| {
         s.ssh.auto_reconnect = v
     });
+    let show_latency = switch("ssh", "show_latency", ssh.show_latency, |s, v| {
+        s.ssh.show_latency = v
+    });
     vec![
         section(
             None,
@@ -568,6 +571,7 @@ fn shell(window: &mut Window, cx: &mut App) -> Vec<AnyElement> {
             [
                 row(label("known_hosts"), text(&known_hosts)).into_any_element(),
                 row(label("auto_reconnect"), auto_reconnect).into_any_element(),
+                row(label("show_latency"), show_latency).into_any_element(),
             ],
             cx,
         ),
