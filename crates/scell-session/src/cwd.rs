@@ -29,13 +29,9 @@ fn is_local_host(host: &str) -> bool {
 }
 
 fn hostname() -> Option<String> {
-    #[cfg(unix)]
-    let name = std::fs::read_to_string("/proc/sys/kernel/hostname")
-        .or_else(|_| std::fs::read_to_string("/etc/hostname"))
-        .ok();
-    #[cfg(windows)]
-    let name = std::env::var("COMPUTERNAME").ok();
-    name.map(|n| n.trim().to_owned()).filter(|n| !n.is_empty())
+    sysinfo::System::host_name()
+        .map(|n| n.trim().to_owned())
+        .filter(|n| !n.is_empty())
 }
 
 fn percent_decode(s: &str) -> Option<String> {

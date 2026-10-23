@@ -88,6 +88,29 @@ jobs:
             target/dist/*.nupkg
             target/dist/releases.win.json
 
+  macos:
+    strategy:
+      matrix:
+        # 两种架构各在原生运行器上构建。macos-15-intel 是最后一代 Intel 运行器，GitHub 计划 2027 年 8 月下线
+        runner: [macos-15, macos-15-intel]
+    runs-on: ${{ matrix.runner }}
+    env:
+      # 与 xtask 写进 Info.plist 的 LSMinimumSystemVersion 一致；Apple Silicon 实际从 11.0 起
+      MACOSX_DEPLOYMENT_TARGET: '10.15'
+    steps:
+      - uses: actions/checkout@v7
+      # 版本取自 rust-toolchain.toml
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo install --locked cargo-about --features cli
+      - name: 打包
+        run: cargo xtask dist --format dmg
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-macos-${{ runner.arch }}
+          if-no-files-found: error
+          path: target/dist/*.dmg
+
   # 打成 pacman 包
   # README 经 latest/download 直接链接
   arch:
@@ -119,7 +142,7 @@ jobs:
           path: out/*.pkg.tar.zst
 
   release:
-    needs: [linux, windows, arch]
+    needs: [linux, windows, macos, arch]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:
