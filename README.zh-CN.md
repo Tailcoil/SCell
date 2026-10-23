@@ -9,7 +9,7 @@
 <p align="center">
   <a href="https://github.com/Tailcoil/scell/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Tailcoil/scell/ci.yml?branch=main&label=CI" alt="CI"></a>
   <a href="https://github.com/Tailcoil/scell/releases/latest"><img src="https://img.shields.io/github/v/release/Tailcoil/scell?label=release" alt="最新版本"></a>
-  <img src="https://img.shields.io/badge/platform-Linux%20%7C%20Windows-1f5560" alt="平台：Linux | Windows">
+  <img src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-1f5560" alt="平台：Linux | macOS | Windows">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-1f5560" alt="许可证：Apache-2.0"></a>
   <br>
   <a href="https://www.rust-lang.org"><img src="https://img.shields.io/badge/Rust-1f5560?logo=rust&logoColor=white" alt="Rust"></a>
@@ -41,6 +41,7 @@
 | 系统 | 安装 |
 |---|---|
 | Windows | [`setup.exe`、便携版 `.zip`](https://github.com/Tailcoil/scell/releases/latest) |
+| macOS | [`.dmg`](https://github.com/Tailcoil/scell/releases/latest)，支持 Apple Silicon 与 Intel；未签名，首次打开需在“系统设置 → 隐私与安全性”中允许 |
 | Debian、Ubuntu | [`.deb`](https://github.com/Tailcoil/scell/releases/latest) |
 | Fedora | [`.rpm`](https://github.com/Tailcoil/scell/releases/latest) |
 | Arch Linux | [`.pkg.tar.zst`](https://github.com/Tailcoil/scell/releases/latest/download/scell-bin-x86_64.pkg.tar.zst)，用 `sudo pacman -U` 安装 |
@@ -53,6 +54,7 @@
 # Debian、Ubuntu
 sudo apt install build-essential pkg-config libfontconfig-dev libfreetype-dev \
   libxkbcommon-dev libxkbcommon-x11-dev libxcb1-dev
+# macOS：安装 Xcode
 cargo build --release
 ```
 

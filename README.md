@@ -9,7 +9,7 @@
 <p align="center">
   <a href="https://github.com/Tailcoil/scell/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Tailcoil/scell/ci.yml?branch=main&label=CI" alt="CI"></a>
   <a href="https://github.com/Tailcoil/scell/releases/latest"><img src="https://img.shields.io/github/v/release/Tailcoil/scell?label=release" alt="Latest release"></a>
-  <img src="https://img.shields.io/badge/platform-Linux%20%7C%20Windows-1f5560" alt="Platform: Linux | Windows">
+  <img src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-1f5560" alt="Platform: Linux | macOS | Windows">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-1f5560" alt="License: Apache-2.0"></a>
   <br>
   <a href="https://www.rust-lang.org"><img src="https://img.shields.io/badge/Rust-1f5560?logo=rust&logoColor=white" alt="Rust"></a>
@@ -41,6 +41,7 @@
 | System | Install |
 |---|---|
 | Windows | [`setup.exe`, portable `.zip`](https://github.com/Tailcoil/scell/releases/latest) |
+| macOS | [`.dmg`](https://github.com/Tailcoil/scell/releases/latest) for Apple Silicon and Intel; unsigned, allow it in System Settings → Privacy & Security on first launch |
 | Debian, Ubuntu | [`.deb`](https://github.com/Tailcoil/scell/releases/latest) |
 | Fedora | [`.rpm`](https://github.com/Tailcoil/scell/releases/latest) |
 | Arch Linux | [`.pkg.tar.zst`](https://github.com/Tailcoil/scell/releases/latest/download/scell-bin-x86_64.pkg.tar.zst), install with `sudo pacman -U` |
@@ -53,6 +54,7 @@
 # Debian / Ubuntu
 sudo apt install build-essential pkg-config libfontconfig-dev libfreetype-dev \
   libxkbcommon-dev libxkbcommon-x11-dev libxcb1-dev
+# macOS: install Xcode
 cargo build --release
 ```
 

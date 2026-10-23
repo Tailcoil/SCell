@@ -3,10 +3,11 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::ConfigError;
 
-/// 配置目录布局。`SCELL_CONFIG_DIR` 优先于平台默认目录（Linux `~/.config/scell`，Windows `%APPDATA%\scell`）。
+/// 配置目录布局。`SCELL_CONFIG_DIR` 优先于平台默认目录（Linux `~/.config/scell`，
+/// macOS `~/Library/Application Support/scell`，Windows `%APPDATA%\scell`）。
 ///
 /// 运行状态（最近使用等）不属于配置，默认放在平台的状态目录（Linux `~/.local/state/scell`，
-/// Windows `%LOCALAPPDATA%\scell`），不混进用户可能纳入版本管理的配置目录；指定了 `SCELL_CONFIG_DIR` 时放在其中，便于隔离。
+/// Windows `%LOCALAPPDATA%\scell`；macOS 没有状态目录，与配置同在一处），不混进用户可能纳入版本管理的配置目录；指定了 `SCELL_CONFIG_DIR` 时放在其中，便于隔离。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConfigPaths {
     root: PathBuf,

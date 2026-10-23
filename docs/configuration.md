@@ -2,10 +2,10 @@
 
 [简体中文](configuration.zh-CN.md)
 
-| | Linux | Windows |
-|---|---|---|
-| Settings | `~/.config/scell/settings.toml` | `%APPDATA%\scell\settings.toml` |
-| Logs | `~/.local/state/scell/logs` | `%LOCALAPPDATA%\scell\logs` |
+| | Linux | macOS | Windows |
+|---|---|---|---|
+| Settings | `~/.config/scell/settings.toml` | `~/Library/Application Support/scell/settings.toml` | `%APPDATA%\scell\settings.toml` |
+| Logs | `~/.local/state/scell/logs` | `~/Library/Application Support/scell/logs` | `%LOCALAPPDATA%\scell\logs` |
 
 Settings apply when the file is saved. Most of them are also on the settings page (Ctrl+,).
 

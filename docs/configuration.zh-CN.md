@@ -2,10 +2,10 @@
 
 [English](configuration.md)
 
-| | Linux | Windows |
-|---|---|---|
-| 设置 | `~/.config/scell/settings.toml` | `%APPDATA%\scell\settings.toml` |
-| 日志 | `~/.local/state/scell/logs` | `%LOCALAPPDATA%\scell\logs` |
+| | Linux | macOS | Windows |
+|---|---|---|---|
+| 设置 | `~/.config/scell/settings.toml` | `~/Library/Application Support/scell/settings.toml` | `%APPDATA%\scell\settings.toml` |
+| 日志 | `~/.local/state/scell/logs` | `~/Library/Application Support/scell/logs` | `%LOCALAPPDATA%\scell\logs` |
 
 设置文件保存后立即生效，大部分选项也可以在设置页（Ctrl+,）里修改。
 
