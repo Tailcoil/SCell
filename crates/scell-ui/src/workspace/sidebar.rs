@@ -104,7 +104,7 @@ fn tab_row(
     let id = tab.id;
     let theme = cx.theme();
     let active = index == ws.active;
-    let title = tab.display_title();
+    let title = tab.display_title(cx);
     let icon = tab.icon(cx);
     let panes = tab
         .terminals()

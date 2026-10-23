@@ -947,10 +947,10 @@ impl Workspace {
     }
 
     /// 窗口在“移到窗口”菜单里的名称：当前标签的标题。
-    pub(crate) fn window_label(&self) -> gpui_kit::SharedString {
+    pub(crate) fn window_label(&self, cx: &gpui_kit::App) -> gpui_kit::SharedString {
         self.tabs
             .get(self.active)
-            .map(Tab::display_title)
+            .map(|t| t.display_title(cx))
             .unwrap_or_default()
     }
 
@@ -1413,7 +1413,7 @@ impl Workspace {
         let Some(tab) = self.tabs.iter().find(|t| t.id == id) else {
             return;
         };
-        let current = tab.display_title();
+        let current = tab.display_title(cx);
         let input = cx.new(|cx| InputState::new(window, cx).default_value(current));
         let events = cx.subscribe_in(
             &input,
@@ -1670,7 +1670,7 @@ impl Render for Workspace {
         let title = self
             .tabs
             .get(self.active)
-            .map(Tab::display_title)
+            .map(|t| t.display_title(cx))
             .unwrap_or_default();
         window.set_window_title(&title);
 

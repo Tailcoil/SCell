@@ -255,6 +255,9 @@ settings:
   show_latency:
     en: Show Latency
     zh-CN: 显示连接延迟
+  keep_host_title:
+    en: Keep Host Name as Tab Title
+    zh-CN: 标签固定显示主机名
   restore_session:
     en: Restore Tabs on Startup
     zh-CN: 启动时恢复标签

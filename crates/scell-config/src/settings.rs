@@ -205,6 +205,8 @@ pub struct SshSettings {
     pub auto_reconnect: bool,
     /// 在 SSH 窗格右下角显示连接的往返延迟。
     pub show_latency: bool,
+    /// SSH 标签固定显示主机名，不随远端程序设置的标题变化。
+    pub keep_host_title: bool,
 }
 
 impl Default for SshSettings {
@@ -213,6 +215,7 @@ impl Default for SshSettings {
             known_hosts: None,
             auto_reconnect: true,
             show_latency: true,
+            keep_host_title: true,
         }
     }
 }
