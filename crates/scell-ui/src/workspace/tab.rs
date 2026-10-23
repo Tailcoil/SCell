@@ -192,13 +192,21 @@ impl Tab {
     }
 
     /// 用户命名优先；终端标签其次显示当前窗格的标题，程序未设置时用默认名称。
-    pub(crate) fn display_title(&self) -> SharedString {
+    /// 设置了固定主机名时，SSH 窗格始终显示主机库里的名称。
+    pub(crate) fn display_title(&self, cx: &gpui_kit::App) -> SharedString {
         if let Some(title) = &self.custom_title {
             return title.clone();
         }
         match &self.content {
             TabContent::Terminals(t) => match t.focused_pane() {
                 Some(p) => match (p.title.as_deref(), &p.launch) {
+                    (_, Launch::Ssh { host, name })
+                        if crate::config::ConfigState::settings(cx).ssh.keep_host_title =>
+                    {
+                        crate::config::ConfigState::hosts(cx)
+                            .get(host)
+                            .map_or_else(|| name.clone(), |h| h.name.clone().into())
+                    }
                     (Some(title), _) if !title.is_empty() => title.to_owned().into(),
                     (_, Launch::Ssh { name, .. }) => name.clone(),
                     _ => "Shell".into(),

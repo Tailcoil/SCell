@@ -188,7 +188,7 @@ pub(crate) fn other_windows(
         .iter()
         .filter(|(window, _)| *window != current)
         .filter_map(|(window, ws)| {
-            let label = ws.upgrade()?.read(cx).window_label();
+            let label = ws.upgrade()?.read(cx).window_label(cx);
             Some((*window, ws.clone(), label))
         })
         .collect()
