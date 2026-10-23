@@ -35,7 +35,7 @@ use crate::appearance::{self, Appearance};
 use crate::config::{self, ConfigState};
 use crate::files::{FilesPanelEvent, SftpView};
 use crate::overlays::{FindBar, FindEvent, Palette, PaletteEvent, PaletteMode};
-use crate::panels::{ContextPanel, PanelTarget};
+use crate::panels::{ContextPanel, PanelTarget, Source};
 use crate::tabs::SettingsView;
 use crate::ui::{metrics, motion};
 use pane_tree::{Axis, Direction, PaneId};
@@ -319,16 +319,49 @@ impl Workspace {
         context.update(cx, |c, cx| c.release(id, cx));
     }
 
-    /// 让右侧面板跟随当前标签。面板收起时只通知它隐藏，不读取工作目录等信息。
+    /// 让右侧面板跟随当前标签。面板收起时只通知它隐藏，不读取工作目录等信息；
+    /// 状态面板的采集不论面板是否可见都按全部会话同步。
     fn sync_context(&self, cx: &mut Context<Self>) {
+        let sources = self.status_sources(cx);
         let target = if self.context_shown {
             self.context_target(cx)
         } else {
             None
         };
         let visible = self.context_shown;
-        self.context
-            .update(cx, |c, cx| c.set_target(target, visible, cx));
+        self.context.update(cx, |c, cx| {
+            c.sync_status(&sources, cx);
+            c.set_target(target, visible, cx);
+        });
+    }
+
+    /// 窗口里全部终端窗格与 SFTP 标签的会话。
+    fn status_sources(&self, cx: &gpui_kit::App) -> Vec<Source> {
+        let mut sources = Vec::new();
+        for tab in &self.tabs {
+            match &tab.content {
+                TabContent::Terminals(t) => {
+                    sources.extend(t.panes.iter().map(|p| Source {
+                        session: p.session.clone(),
+                        host: match &p.launch {
+                            Launch::Ssh { host, .. } => Some(host.clone()),
+                            Launch::Local(_) => None,
+                        },
+                        live: p.status == PaneStatus::Running,
+                    }));
+                }
+                TabContent::Sftp(sftp) => {
+                    let view = sftp.view.read(cx);
+                    sources.push(Source {
+                        session: view.session().clone(),
+                        host: Some(view.host().clone()),
+                        live: view.is_connected(),
+                    });
+                }
+                TabContent::Settings(_) => {}
+            }
+        }
+        sources
     }
 
     /// 终端标签跟随焦点窗格，SFTP 标签跟随它连接的主机。

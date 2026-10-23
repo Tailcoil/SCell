@@ -2,7 +2,7 @@
 //!
 //! 面板只在自己可见时收到 [`ContextItem::follow`]（当前窗格的会话，每次重绘与定时检查时都会调用，
 //! 实现应只在目标变化时做事）；切到别的页或面板收起时收到 [`ContextItem::hide`]，应停止后台工作
-//! （监控探针、轮询）。会话事件广播给全部面板。
+//! （轮询等）。会话事件广播给全部面板。状态面板的采集不随可见性启停，由 [`ContextPanel::sync_status`] 驱动。
 
 mod automations;
 mod forwards;
@@ -32,6 +32,15 @@ pub(crate) struct PanelTarget {
     pub(crate) encoding: Encoding,
     /// 终端的当前目录：OSC 7 上报的，或本地进程的工作目录。
     pub(crate) cwd: Option<VfsPath>,
+}
+
+/// 窗口里的一个会话，供状态面板选择采集来源。
+pub(crate) struct Source {
+    pub(crate) session: SessionHandle,
+    /// SSH 会话的主机；本地会话为空。
+    pub(crate) host: Option<HostId>,
+    /// 本地进程在运行，或远程会话已连上。
+    pub(crate) live: bool,
 }
 
 /// 上下文面板中的一页。
@@ -89,13 +98,15 @@ pub(crate) struct ContextPanel {
     target: Option<PanelTarget>,
     /// 文件面板会发出“在标签页中打开”，工作区需要订阅它。
     pub(crate) files: Entity<FilesPanel>,
+    status: Entity<StatusPanel>,
 }
 
 impl ContextPanel {
     pub(crate) fn new(cx: &mut Context<Self>) -> Self {
         let files = cx.new(|_| FilesPanel::default());
+        let status = cx.new(|_| StatusPanel::default());
         let items: Vec<Box<dyn AnyItem>> = vec![
-            Box::new(cx.new(|_| StatusPanel::default())),
+            Box::new(status.clone()),
             Box::new(files.clone()),
             Box::new(cx.new(ForwardsPanel::new)),
             Box::new(cx.new(|_| AutomationsPanel::default())),
@@ -106,7 +117,13 @@ impl ContextPanel {
             visible: false,
             target: None,
             files,
+            status,
         }
+    }
+
+    /// 由工作区定时调用，传入窗口里的全部会话。
+    pub(crate) fn sync_status(&self, sources: &[Source], cx: &mut App) {
+        self.status.update(cx, |s, cx| s.sync(sources, cx));
     }
 
     /// 由工作区在重绘与定时检查时调用。

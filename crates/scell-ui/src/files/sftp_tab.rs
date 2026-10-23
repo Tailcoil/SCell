@@ -79,6 +79,11 @@ impl SftpView {
         &self.host
     }
 
+    /// 文件会话已连上（远程一侧在打开或已打开）。
+    pub(crate) fn is_connected(&self) -> bool {
+        matches!(self.remote, Remote::Opening(_) | Remote::Ready(..))
+    }
+
     pub(crate) fn connecting(&mut self, cx: &mut Context<Self>) {
         if self.remote().is_none() {
             self.remote = Remote::Connecting;

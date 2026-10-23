@@ -1,8 +1,8 @@
 //! “状态”面板：会话所在机器的 CPU、内存、负载、网络、磁盘与占用最高的进程。
 //!
 //! 数据与走势按机器保留：本地会话共用本机的一份，同一主机的远程会话共用一份，在窗格间切换时走势连续。
-//! 面板可见期间看过的机器都继续采集；面板隐藏即全部停止（数据保留，再显示时接着采）。
-//! 远程采集借用其中一个会话的连接，该会话关闭或重连后，下次跟随时改由当前会话重新开始。
+//! 窗口里有活动会话的机器都持续采集，与面板是否可见无关，切过去时走势已经就绪；主机设置里关闭监控的除外。
+//! 远程采集借用其中一个已连接会话的连接，该会话关闭、断开或重连后，下次同步时改由同机器的其他会话重新开始。
 //! 版式按面板自身的尺寸调整：宽时进程列表加命令行一列，高时 CPU、内存多一条当前值指示条并列出更多进程。
 
 use std::cell::Cell;
@@ -21,7 +21,7 @@ use rust_i18n::t;
 use scell_config::HostId;
 use scell_session::{Metrics, MetricsUpdate, SessionEvent, SessionHandle, SessionId, Usage};
 
-use super::{ContextItem, PanelTarget};
+use super::{ContextItem, PanelTarget, Source};
 use crate::config::ConfigState;
 use crate::files::format_size;
 
@@ -55,12 +55,12 @@ enum Machine {
 }
 
 impl Machine {
-    fn of(target: &PanelTarget) -> Self {
-        target.host.clone().map_or(Self::Local, Self::Host)
+    fn of_host(host: Option<&HostId>) -> Self {
+        host.cloned().map_or(Self::Local, Self::Host)
     }
 }
 
-/// 一台机器的采集与历史。历史中的 `None` 标记采集中断过（面板隐藏、断线后重新开始）。
+/// 一台机器的采集与历史。历史中的 `None` 标记采集中断过（断线、会话全部关闭后重新开始）。
 #[derive(Default)]
 struct Watched {
     state: State,
@@ -159,6 +159,64 @@ impl StatusPanel {
 }
 
 impl StatusPanel {
+    /// 按窗口里的全部会话补齐采集：没在采的机器选一个已连接的会话开始，来源会话不再可用的换一个，
+    /// 没有会话的机器停止（数据保留）。由工作区定时调用，只在有变化时做事。
+    pub(crate) fn sync(&mut self, sources: &[Source], cx: &mut Context<Self>) {
+        let mut seen = Vec::new();
+        for source in sources {
+            let machine = Machine::of_host(source.host.as_ref());
+            if seen.contains(&machine) {
+                continue;
+            }
+            seen.push(machine.clone());
+            let enabled = source
+                .host
+                .as_ref()
+                .and_then(|h| ConfigState::hosts(cx).get(h))
+                .is_none_or(|h| h.monitor);
+            let w = self.machines.entry(machine.clone()).or_default();
+            if !enabled {
+                if !matches!(w.state, State::Disabled) {
+                    w.via = None;
+                    w.watch = None;
+                    w.state = State::Disabled;
+                    cx.notify();
+                }
+                continue;
+            }
+            if matches!(w.state, State::Disabled) {
+                w.state = State::Waiting;
+                cx.notify();
+            }
+            let live = |s: &&Source| s.live && Machine::of_host(s.host.as_ref()) == machine;
+            if w.watch.is_some()
+                && sources
+                    .iter()
+                    .filter(live)
+                    .any(|s| Some(s.session.id()) == w.via)
+            {
+                continue;
+            }
+            match sources.iter().find(live) {
+                Some(s) => {
+                    self.start(machine, &s.session, cx);
+                    cx.notify();
+                }
+                None if w.watch.is_some() => {
+                    w.via = None;
+                    w.watch = None;
+                }
+                None => {}
+            }
+        }
+        for (machine, w) in &mut self.machines {
+            if !seen.contains(machine) {
+                w.via = None;
+                w.watch = None;
+            }
+        }
+    }
+
     fn stop_via(&mut self, session: SessionId) {
         for w in self.machines.values_mut() {
             if w.via == Some(session) {
@@ -175,46 +233,14 @@ impl ContextItem for StatusPanel {
     }
 
     fn follow(&mut self, target: Option<&PanelTarget>, cx: &mut Context<Self>) {
-        let machine = target.map(Machine::of);
+        let machine = target.map(|t| Machine::of_host(t.host.as_ref()));
         if self.current != machine {
             self.current = machine;
             cx.notify();
         }
-        let Some(target) = target else {
-            return;
-        };
-        let enabled = target
-            .host
-            .as_ref()
-            .and_then(|h| ConfigState::hosts(cx).get(h))
-            .is_none_or(|h| h.monitor);
-        let machine = Machine::of(target);
-        let w = self.machines.entry(machine.clone()).or_default();
-        if !enabled {
-            if !matches!(w.state, State::Disabled) {
-                w.watch = None;
-                w.state = State::Disabled;
-                cx.notify();
-            }
-            return;
-        }
-        if matches!(w.state, State::Disabled) {
-            w.state = State::Waiting;
-        }
-        if w.watch.is_none() {
-            self.start(machine, &target.session, cx);
-            cx.notify();
-        }
     }
 
-    /// 停止全部采集，保留数据。
-    fn hide(&mut self, _: &mut Context<Self>) {
-        for w in self.machines.values_mut() {
-            w.watch = None;
-        }
-    }
-
-    /// 远程会话连上前无法采集，连上（或重连）后在下次跟随时重新开始。
+    /// 远程会话连上前无法采集，连上（或重连）后在下次同步时重新开始。
     fn session_event(&mut self, event: &SessionEvent, cx: &mut Context<Self>) {
         if let SessionEvent::Connected(id) = event {
             self.stop_via(*id);
@@ -222,7 +248,7 @@ impl ContextItem for StatusPanel {
         }
     }
 
-    /// 机器的数据留着，其他会话还可能在看；借用这个会话的采集停下，下次跟随时换会话重新开始。
+    /// 机器的数据留着，其他会话还可能在看；借用这个会话的采集停下，下次同步时换会话重新开始。
     fn release(&mut self, session: SessionId, _: &mut Context<Self>) {
         self.stop_via(session);
     }
