@@ -72,11 +72,13 @@ fn tree(root: &std::path::Path) {
     std::fs::write(root.join("top.txt"), "top").unwrap();
     std::fs::write(root.join("a/b/deep.bin"), vec![7u8; 300_000]).unwrap();
     #[cfg(unix)]
+    std::os::unix::fs::symlink("top.txt", root.join("link")).unwrap();
+    // macOS 的 APFS 拒绝非 UTF-8 文件名
+    #[cfg(all(unix, not(target_os = "macos")))]
     {
         use std::os::unix::ffi::OsStrExt;
         let gbk = std::ffi::OsStr::from_bytes(b"\xd6\xd0\xce\xc4.txt");
         std::fs::write(root.join("a").join(gbk), "gbk").unwrap();
-        std::os::unix::fs::symlink("top.txt", root.join("link")).unwrap();
     }
     // Windows 上改时间需要写属性权限，只读打开会被拒绝
     std::fs::File::options()
@@ -106,7 +108,11 @@ async fn uploads_directory_tree_to_sftp_preserving_metadata() {
     ));
     let info = finished(&events, id).await;
     assert_eq!(info.state, TransferState::Done);
-    let files = if cfg!(unix) { 3 } else { 2 };
+    let files = if cfg!(all(unix, not(target_os = "macos"))) {
+        3
+    } else {
+        2
+    };
     assert_eq!((info.files_done, info.files_total), (files, files));
     assert_eq!(info.bytes_done, info.bytes_total);
 
@@ -118,7 +124,7 @@ async fn uploads_directory_tree_to_sftp_preserving_metadata() {
     assert!(!copy.join("link").exists(), "符号链接不复制");
     let m = sftp.stat(&local(&copy.join("top.txt"))).await.unwrap();
     assert_eq!(m.modified, Some(1_500_000_000));
-    #[cfg(unix)]
+    #[cfg(all(unix, not(target_os = "macos")))]
     {
         use std::os::unix::ffi::OsStrExt;
         let gbk = std::ffi::OsStr::from_bytes(b"\xd6\xd0\xce\xc4.txt");
