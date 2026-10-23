@@ -45,7 +45,7 @@ keyring-core = "1"
 windows-native-keyring-store = "1"
 apple-native-keyring-store = { version = "1", features = ["keychain"] }
 zbus-secret-service-keyring-store = { version = "1", features = ["crypto-rust"] }
-shlex = "1"
+shlex = "2"
 ssh2-config = "0.8"
 tempfile = "3"
 toml = "1"
@@ -62,7 +62,7 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "std"
 async-trait = "0.1"
 bytes = "1"
 clap = { version = "4", features = ["derive", "env"] }
-flume = "0.11"
+flume = "0.12"
 parking_lot = "0.12"
 rust-i18n = "4"
 serde = { version = "1", features = ["derive"] }
