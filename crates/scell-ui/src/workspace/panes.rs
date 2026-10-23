@@ -1,7 +1,7 @@
 //! 当前标签的分屏渲染。每个窗格是一张圆角卡片，卡片之间留白，不画分隔线；多窗格时非焦点窗格略微淡化。
 
 use std::rc::Rc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use gpui_kit::base::{ResizablePanelGroup, ResizeHandleRenderer, ResizeHandleState};
 use gpui_kit::component::button::{Button, ButtonVariants};
@@ -20,11 +20,14 @@ use super::Workspace;
 use super::pane_tree::{Axis, PaneTree};
 use super::tab::{Launch, Pane, PanePrompt, PaneStatus, TabContent, Terminals};
 use crate::appearance::Appearance;
+use crate::config::ConfigState;
 use crate::ui::metrics::{ENTER_OFFSET, PANE_GAP, PANE_MIN, PANE_PADDING, PROMPT_WIDTH};
 use crate::ui::motion;
 
 /// 多窗格时非焦点卡片的不透明度系数。
 const INACTIVE_ALPHA: f32 = 0.6;
+/// 延迟达到此值时改用警示色。
+const SLOW_LATENCY: Duration = Duration::from_millis(300);
 
 pub(super) fn render_active_tab(ws: &Workspace, cx: &mut Context<Workspace>) -> AnyElement {
     let Some(tab) = ws.tabs.get(ws.active) else {
@@ -111,6 +114,7 @@ fn render_pane(tab: &Terminals, pane: &Pane, cx: &mut Context<Workspace>) -> Any
                 .bg(bg)
                 .p(PANE_PADDING)
                 .child(pane.view.clone())
+                .children(latency(pane, cx))
                 .when(pane.status.ended(), |this| {
                     this.child(exit_banner(pane, cx))
                 })
@@ -146,6 +150,33 @@ fn card(cx: &Context<Workspace>) -> gpui_kit::Div {
         .rounded(cx.theme().radius_lg)
         .bg(Appearance::card(cx))
         .overflow_hidden()
+}
+
+/// SSH 窗格右下角的连接延迟。只是叠在终端上的文字，不接收鼠标，不影响终端里的选择。
+fn latency(pane: &Pane, cx: &Context<Workspace>) -> Option<AnyElement> {
+    if pane.status != PaneStatus::Running || !ConfigState::settings(cx).ssh.show_latency {
+        return None;
+    }
+    let rtt = pane.latency?;
+    let theme = cx.theme();
+    let text = match rtt.as_millis() {
+        0 => "<1 ms".to_owned(),
+        ms => format!("{ms} ms"),
+    };
+    Some(
+        div()
+            .absolute()
+            .right(PANE_PADDING * 2.)
+            .bottom(PANE_PADDING)
+            .text_xs()
+            .text_color(if rtt >= SLOW_LATENCY {
+                theme.warning
+            } else {
+                theme.muted_foreground
+            })
+            .child(text)
+            .into_any_element(),
+    )
 }
 
 /// 进程已退出或连接已断开时，卡片底部显示状态与重启/重连按钮。

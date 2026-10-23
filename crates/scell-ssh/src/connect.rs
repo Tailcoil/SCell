@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use russh::client::{self, Handle};
 use russh::keys::{PrivateKeyWithHashAlg, load_secret_key};
@@ -431,6 +432,17 @@ impl Connection {
 
     pub fn is_closed(&self) -> bool {
         self.handle.is_closed()
+    }
+
+    /// 发一次 `keepalive@openssh.com` 并等回复，返回往返时间。连接卡住时回复不会到达，调用方需自行限时。
+    pub async fn ping(&self) -> Result<Duration, SshError> {
+        let start = Instant::now();
+        self.handle.send_ping().await?;
+        // 等待期间连接断开时 russh 也返回成功
+        if self.is_closed() {
+            return Err(russh::Error::Disconnect.into());
+        }
+        Ok(start.elapsed())
     }
 
     /// 本地转发（`-L`）：在本机 `bind` 监听，每个连接经本连接转到远端可达的 `target`。

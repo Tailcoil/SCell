@@ -66,6 +66,9 @@ pub(crate) enum SshMode {
     Files,
 }
 
+/// 测延迟时等待回复的上限，超过即视为没有结果。
+const PING_TIMEOUT: Duration = Duration::from_secs(5);
+
 /// 文件会话检查连接是否断开的间隔。
 const LINK_POLL: Duration = Duration::from_secs(2);
 
@@ -151,6 +154,17 @@ impl TransportControl for SshControl {
         if let Some(link) = self.link.lock().as_ref() {
             crate::forwards::remove(link, id);
         }
+    }
+
+    fn ping(&self) -> tokio::sync::oneshot::Receiver<Option<Duration>> {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        if let Some(link) = self.link.lock().clone() {
+            self.rt.spawn(async move {
+                let rtt = tokio::time::timeout(PING_TIMEOUT, link.conn.ping()).await;
+                let _ = tx.send(rtt.ok().and_then(Result::ok));
+            });
+        }
+        rx
     }
 
     fn is_connected(&self) -> bool {

@@ -361,6 +361,35 @@ fn sftp_rides_on_shared_connection() {
     service.close(files.id());
 }
 
+/// 延迟：连上前没有结果，连上后能测出往返时间，断开后又没有结果。
+#[test]
+#[ignore = "需要 SCELL_SSH_IT"]
+fn ping_measures_round_trip() {
+    let raw = std::env::var("SCELL_SSH_IT").expect("需要设置 SCELL_SSH_IT");
+    let parts: Vec<&str> = raw.splitn(5, ':').collect();
+    let [addr, port, user, key, _] = parts[..] else {
+        panic!("SCELL_SSH_IT 格式错误");
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let target = SshTarget {
+        host: host("ping", addr, port, user, key),
+        jumps: Vec::new(),
+        known_hosts: dir.path().join("known_hosts"),
+    };
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let (service, events) = SessionService::new(rt.handle().clone());
+    let handle = service.spawn_files(target, true);
+    assert_eq!(rt.block_on(handle.ping()), None, "未连接时不应有延迟");
+    handle.reconnect();
+    wait_connected(&events, &handle);
+
+    let rtt = rt.block_on(handle.ping()).expect("测延迟");
+    assert!(rtt < Duration::from_secs(5), "{rtt:?}");
+    service.close(handle.id());
+    std::thread::sleep(Duration::from_millis(300));
+    assert_eq!(rt.block_on(handle.ping()), None, "关闭后不应有延迟");
+}
+
 /// 两层跳板：C 经 B、B 经 A，C 的链由主机库递归展开。三跳都指向同一个 sshd，经前一跳的 direct-tcpip 到达。
 #[test]
 #[ignore = "需要 SCELL_SSH_IT 指向 127.0.0.1"]

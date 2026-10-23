@@ -252,6 +252,9 @@ settings:
   auto_reconnect:
     en: Reconnect Automatically
     zh-CN: 断线自动重连
+  show_latency:
+    en: Show Latency
+    zh-CN: 显示连接延迟
   restore_session:
     en: Restore Tabs on Startup
     zh-CN: 启动时恢复标签

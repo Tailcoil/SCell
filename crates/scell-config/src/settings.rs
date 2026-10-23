@@ -203,6 +203,8 @@ pub struct SshSettings {
     pub known_hosts: Option<std::path::PathBuf>,
     /// 已建立的连接因网络原因断开后，按退避间隔自动重连。认证失败等不会重试。
     pub auto_reconnect: bool,
+    /// 在 SSH 窗格右下角显示连接的往返延迟。
+    pub show_latency: bool,
 }
 
 impl Default for SshSettings {
@@ -210,6 +212,7 @@ impl Default for SshSettings {
         Self {
             known_hosts: None,
             auto_reconnect: true,
+            show_latency: true,
         }
     }
 }

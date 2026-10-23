@@ -45,6 +45,8 @@ use tab::{Launch, Pane, PanePrompt, PaneStatus, SessionIo, Tab, TabContent, Term
 
 /// 右侧面板跟随窗格的检查间隔（本地会话的工作目录、转发流量等）。
 const FOLLOW_POLL: Duration = Duration::from_secs(1);
+/// SSH 窗格测连接延迟的间隔。
+const LATENCY_POLL: Duration = Duration::from_secs(2);
 
 /// 标签、窗格与分屏的 id 全应用唯一，标签移到别的窗口后不必重新编号。
 fn next_id() -> u64 {
@@ -89,6 +91,8 @@ pub(crate) struct Workspace {
     renaming: Option<Rename>,
     /// 最近一次绘制时的窗口尺寸，退出时随布局保存。
     size: Option<gpui_kit::Size<gpui_kit::Pixels>>,
+    /// 正在测延迟、还没回复的主机，网络卡住时不重复发。
+    pinging: Vec<HostId>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -149,6 +153,7 @@ impl Workspace {
             palette: None,
             renaming: None,
             size: None,
+            pinging: Vec::new(),
             _subscriptions: vec![appearance, search_changed],
         };
         let files = ws.context.read(cx).files.clone();
@@ -174,6 +179,15 @@ impl Workspace {
             loop {
                 cx.background_executor().timer(FOLLOW_POLL).await;
                 if ws.update(cx, |ws, cx| ws.sync_context(cx)).is_err() {
+                    break;
+                }
+            }
+        })
+        .detach();
+        cx.spawn(async move |ws, cx| {
+            loop {
+                cx.background_executor().timer(LATENCY_POLL).await;
+                if ws.update(cx, |ws, cx| ws.measure_latency(cx)).is_err() {
                     break;
                 }
             }
@@ -333,6 +347,46 @@ impl Workspace {
             c.sync_status(&sources, cx);
             c.set_target(target, visible, cx);
         });
+    }
+
+    /// 给当前标签里已连上的 SSH 窗格测延迟。同一主机的会话共用连接，每台主机只测一次。
+    fn measure_latency(&mut self, cx: &mut Context<Self>) {
+        if !ConfigState::settings(cx).ssh.show_latency {
+            return;
+        }
+        let Some(t) = self.active_terminals() else {
+            return;
+        };
+        let mut pings = Vec::new();
+        for p in &t.panes {
+            if let Launch::Ssh { host, .. } = &p.launch
+                && p.status == PaneStatus::Running
+                && !self.pinging.contains(host)
+                && !pings.iter().any(|(h, _)| h == host)
+            {
+                pings.push((host.clone(), p.session.ping()));
+            }
+        }
+        for (host, ping) in pings {
+            self.pinging.push(host.clone());
+            cx.spawn(async move |ws, cx| {
+                let rtt = ping.await;
+                let _ = ws.update(cx, |ws, cx| ws.set_latency(&host, rtt, cx));
+            })
+            .detach();
+        }
+    }
+
+    fn set_latency(&mut self, host: &HostId, rtt: Option<Duration>, cx: &mut Context<Self>) {
+        self.pinging.retain(|h| h != host);
+        for t in self.tabs.iter_mut().filter_map(Tab::terminals_mut) {
+            for p in &mut t.panes {
+                if matches!(&p.launch, Launch::Ssh { host: h, .. } if h == host) {
+                    p.latency = rtt;
+                }
+            }
+        }
+        cx.notify();
     }
 
     /// 窗口里全部终端窗格与 SFTP 标签的会话。

@@ -130,6 +130,13 @@ impl SessionHandle {
         self.control.is_connected()
     }
 
+    /// 测一次当前连接的往返时间（同一主机的会话共用连接）。本地会话、未连上或超时时为 `None`。
+    /// 返回的 Future 与执行器无关，可在 UI 线程上等待。
+    pub fn ping(&self) -> impl Future<Output = Option<std::time::Duration>> + Send + 'static {
+        let rx = self.control.ping();
+        async move { rx.await.ok().flatten() }
+    }
+
     /// 会话所在机器的文件系统：本地会话为本机，SSH 会话在当前连接上打开 SFTP。
     /// 返回的 Future 与执行器无关，可在 UI 线程上等待。
     pub fn open_vfs(
