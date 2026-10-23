@@ -683,9 +683,10 @@ impl Workspace {
                 cx.notify();
             }
             TabContent::Sftp(sftp) => {
-                match sftp.prompt.as_ref().and_then(|q| q.inputs.first().cloned()) {
-                    Some(input) => input.update(cx, |input, cx| input.focus(window, cx)),
-                    None => window.focus(&sftp.view.focus_handle(cx), cx),
+                let view = sftp.view.clone();
+                let session = view.read(cx).session().id();
+                if !self.focus_prompt_input(session, window, cx) {
+                    window.focus(&view.focus_handle(cx), cx);
                 }
                 cx.notify();
             }
@@ -700,13 +701,12 @@ impl Workspace {
             return;
         };
         p.bell = false;
-        // 有待回答的输入类问题时聚焦输入框
-        let input = p.prompt.as_ref().and_then(|q| q.inputs.first().cloned());
         let view = p.view.clone();
+        let session = p.session.id();
         tab.focused = pane;
-        match input {
-            Some(input) => input.update(cx, |input, cx| input.focus(window, cx)),
-            None => window.focus(&view.focus_handle(cx), cx),
+        // 有待回答的输入类问题时聚焦输入框
+        if !self.focus_prompt_input(session, window, cx) {
+            window.focus(&view.focus_handle(cx), cx);
         }
         cx.notify();
     }
@@ -1176,13 +1176,53 @@ impl Workspace {
                     }
                 })
             })
-            .collect();
+            .collect::<Vec<_>>();
+        // 卡片在时下层视图拿到焦点（窗口重新激活、外部恢复焦点等）就转交给输入框
+        let redirect = self
+            .session_focus(session, cx)
+            .filter(|_| !inputs.is_empty())
+            .map(|focus| {
+                cx.on_focus_in(&focus, window, move |ws, window, cx| {
+                    ws.focus_prompt_input(session, window, cx);
+                })
+            });
         PanePrompt {
             prompt,
             inputs,
             remember: false,
-            _events: events,
+            _events: events.into_iter().chain(redirect).collect(),
         }
+    }
+
+    /// 会话所在的终端视图或 SFTP 视图的焦点。
+    fn session_focus(&self, session: SessionId, cx: &gpui_kit::App) -> Option<FocusHandle> {
+        if let Some(index) = self.sftp_tab(session, cx) {
+            return match &self.tabs[index].content {
+                TabContent::Sftp(sftp) => Some(sftp.view.focus_handle(cx)),
+                _ => None,
+            };
+        }
+        let (tab, pane) = self.find_session(session)?;
+        let view = &self.tabs[tab].terminals()?.pane(pane)?.view;
+        Some(view.focus_handle(cx))
+    }
+
+    /// 聚焦会话提示卡片的第一个输入框；没有卡片或卡片无输入时返回 `false`。
+    fn focus_prompt_input(
+        &mut self,
+        session: SessionId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let input = self
+            .prompt_slot(session, cx)
+            .and_then(|p| p.as_ref())
+            .and_then(|p| p.inputs.first().cloned());
+        let Some(input) = input else {
+            return false;
+        };
+        input.update(cx, |input, cx| input.focus(window, cx));
+        true
     }
 
     fn show_prompt(
