@@ -10,7 +10,7 @@ use gpui_kit::component::input::Input;
 use gpui_kit::component::resizable::resizable_panel;
 use gpui_kit::component::{ActiveTheme, Sizable, StyledExt, h_flex, v_flex};
 use gpui_kit::{
-    AnyElement, Context, ElementId, IntoElement, ParentElement, Styled, div,
+    AnyElement, Context, ElementId, InteractiveElement, IntoElement, ParentElement, Styled, div,
     prelude::FluentBuilder, px,
 };
 use rust_i18n::t;
@@ -320,9 +320,11 @@ fn prompt_card(session: SessionId, prompt: &PanePrompt, cx: &mut Context<Workspa
             t!("prompt.ok")
         })
         .on_click(cx.listener(move |ws, _, window, cx| ws.submit_prompt(session, window, cx)));
+    // 遮挡下层：终端和文件列表按下鼠标就会抢焦点，点输入框时也会命中它们
     div()
         .absolute()
         .inset_0()
+        .occlude()
         .flex()
         .items_center()
         .justify_center()
