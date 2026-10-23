@@ -45,7 +45,8 @@ jobs:
         if: runner.os == 'Linux'
         run: cargo xtask licenses --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
-      - run: cargo test --workspace
+      # 一个测试程序失败后继续跑完其余的，一次看到全部失败
+      - run: cargo test --workspace --no-fail-fast
       - name: SSH 端到端测试
         if: runner.os == 'Linux'
         run: cargo xtask it

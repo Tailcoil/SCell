@@ -59,8 +59,8 @@ async fn suite(vfs: &dyn Vfs, root: VfsPath) {
     assert!(vfs.open_write(&empty, WriteMode::CreateNew).await.is_err());
 
     // 非 UTF-8 文件名：GBK 编码的“中文”，按原始字节创建、列出、改名、删除。
-    // Windows 的文件名是 UTF-16，任意字节存不进去，改用 UTF-8 的中文名
-    let (name, renamed_name): (&[u8], &[u8]) = if cfg!(unix) {
+    // Windows 的文件名是 UTF-16、macOS 的 APFS 只接受 UTF-8，任意字节存不进去，改用 UTF-8 的中文名
+    let (name, renamed_name): (&[u8], &[u8]) = if cfg!(all(unix, not(target_os = "macos"))) {
         (b"\xd6\xd0\xce\xc4.txt", b"\xce\xc4.txt")
     } else {
         ("中文.txt".as_bytes(), "文.txt".as_bytes())
