@@ -20,6 +20,8 @@ pub(crate) enum Format {
     /// Velopack 的安装程序、便携包与更新源。只能在 Windows 上构建，需要与 Cargo.lock 中 velopack
     /// 同版本的 vpk（`dotnet tool install --global vpk --version <版本>`）。
     Velopack,
+    /// 装有 SCell.app 的磁盘映像。只能在 macOS 上构建，未经公证，只做临时签名。
+    Dmg,
 }
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -30,6 +32,9 @@ const MAINTAINER: &str = "Tailcoil <110141765+Tailcoil@users.noreply.github.com>
 /// 安装目录为 %LocalAppData%\Tailcoil.SCell。不能叫 SCell：Windows 路径不分大小写，会与程序自己的
 /// %LocalAppData%\scell（状态与日志）重合，安装时被当成旧版本移走，卸载时被一并删除。
 const VELOPACK_ID: &str = "Tailcoil.SCell";
+const BUNDLE_ID: &str = "io.github.tailcoil.scell";
+/// 与 CI 的 MACOSX_DEPLOYMENT_TARGET 一致；DMG 的 ULMO 压缩格式也要求 10.15 起。
+const MACOS_MIN: &str = "10.15";
 
 /// Debian 包的运行时依赖：直接链接的库，以及 GPUI 运行时动态加载的 Wayland 与图形库。
 const DEB_DEPENDS: &str = "libc6, libgcc-s1, libxcb1, libxkbcommon0, libxkbcommon-x11-0, \
@@ -86,6 +91,7 @@ pub(crate) fn dist(formats: &[Format]) -> anyhow::Result<()> {
             Format::Deb => deb(&pkg, &out, arch)?,
             Format::Rpm => rpm(&pkg, &out, arch)?,
             Format::Velopack => velopack(&pkg, &out, &name)?,
+            Format::Dmg => dmg(&pkg, &out, &name)?,
         };
         println!("{}", path.display());
     }
@@ -174,6 +180,57 @@ fn velopack(pkg: &Package, out: &Path, name: &str) -> anyhow::Result<PathBuf> {
         copy(&path, &dest)?;
     }
     Ok(setup)
+}
+
+fn dmg(pkg: &Package, out: &Path, name: &str) -> anyhow::Result<PathBuf> {
+    if !cfg!(target_os = "macos") {
+        bail!("DMG 只能在 macOS 上构建");
+    }
+    let stage = fresh_dir(&out.join("dmg"))?;
+    let app = stage.join("SCell.app");
+    let contents = app.join("Contents");
+    copy(pkg.bin, &contents.join("MacOS/scell"))?;
+    copy(
+        &pkg.root.join("packaging/macos/scell.icns"),
+        &contents.join("Resources/scell.icns"),
+    )?;
+    pkg.licenses(&contents.join("Resources"))?;
+    let plist = format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key><string>SCell</string>
+    <key>CFBundleDisplayName</key><string>SCell</string>
+    <key>CFBundleIdentifier</key><string>{BUNDLE_ID}</string>
+    <key>CFBundleExecutable</key><string>scell</string>
+    <key>CFBundleIconFile</key><string>scell</string>
+    <key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleShortVersionString</key><string>{VERSION}</string>
+    <key>CFBundleVersion</key><string>{VERSION}</string>
+    <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+    <key>LSMinimumSystemVersion</key><string>{MACOS_MIN}</string>
+    <key>LSApplicationCategoryType</key><string>public.app-category.developer-tools</string>
+    <key>NSHighResolutionCapable</key><true/>
+    <key>NSPrincipalClass</key><string>NSApplication</string>
+</dict>
+</plist>
+"#
+    );
+    std::fs::write(contents.join("Info.plist"), plist)?;
+    // 没有开发者证书，只做临时签名：Apple Silicon 拒绝运行未签名的程序。用户首次打开需在系统设置里放行
+    run(Command::new("codesign")
+        .args(["--force", "--sign", "-"])
+        .arg(&app))?;
+    #[cfg(unix)]
+    std::os::unix::fs::symlink("/Applications", stage.join("Applications"))?;
+    let file = out.join(format!("{name}.dmg"));
+    run(Command::new("hdiutil")
+        .args(["create", "-ov", "-volname", "SCell", "-format", "ULMO"])
+        .arg("-srcfolder")
+        .arg(&stage)
+        .arg(&file))?;
+    Ok(file)
 }
 
 fn archive(pkg: &Package, exe: &str, out: &Path, name: &str) -> anyhow::Result<PathBuf> {

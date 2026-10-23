@@ -31,5 +31,8 @@ tempfile.workspace = true
 [target.'cfg(windows)'.dependencies]
 windows-native-keyring-store.workspace = true
 
+[target.'cfg(target_os = "macos")'.dependencies]
+apple-native-keyring-store.workspace = true
+
 [target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
 zbus-secret-service-keyring-store.workspace = true

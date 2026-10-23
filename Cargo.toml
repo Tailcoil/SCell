@@ -43,6 +43,7 @@ notify = "8"
 serde_json = "1"
 keyring-core = "1"
 windows-native-keyring-store = "1"
+apple-native-keyring-store = { version = "1", features = ["keychain"] }
 zbus-secret-service-keyring-store = { version = "1", features = ["crypto-rust"] }
 shlex = "1"
 ssh2-config = "0.8"

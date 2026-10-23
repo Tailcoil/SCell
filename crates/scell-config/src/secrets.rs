@@ -60,12 +60,17 @@ fn platform_store() -> keyring_core::Result<Arc<CredentialStore>> {
     Ok(windows_native_keyring_store::Store::new()?)
 }
 
+#[cfg(target_os = "macos")]
+fn platform_store() -> keyring_core::Result<Arc<CredentialStore>> {
+    Ok(apple_native_keyring_store::keychain::Store::new()?)
+}
+
 #[cfg(all(unix, not(target_os = "macos")))]
 fn platform_store() -> keyring_core::Result<Arc<CredentialStore>> {
     Ok(zbus_secret_service_keyring_store::Store::new()?)
 }
 
-#[cfg(not(any(windows, all(unix, not(target_os = "macos")))))]
+#[cfg(not(any(windows, unix)))]
 fn platform_store() -> keyring_core::Result<Arc<CredentialStore>> {
     Err(Error::NoDefaultStore)
 }

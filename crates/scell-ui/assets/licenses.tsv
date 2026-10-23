@@ -1,6 +1,7 @@
 accesskit	0.24.1	MIT OR Apache-2.0
 accesskit_atspi_common	0.19.1	MIT OR Apache-2.0
 accesskit_consumer	0.38.0	MIT OR Apache-2.0
+accesskit_macos	0.26.3	MIT OR Apache-2.0
 accesskit_unix	0.22.1	MIT OR Apache-2.0
 accesskit_windows	0.34.0	MIT OR Apache-2.0
 addr2line	0.25.1	Apache-2.0 OR MIT
@@ -22,6 +23,7 @@ anstyle-parse	1.0.0	MIT OR Apache-2.0
 anstyle-query	1.1.5	MIT OR Apache-2.0
 anstyle-wincon	3.0.11	MIT OR Apache-2.0
 anyhow	1.0.104	MIT OR Apache-2.0
+apple-native-keyring-store	1.0.2	MIT OR Apache-2.0
 arc-swap	1.9.3	MIT OR Apache-2.0
 arg_enum_proc_macro	0.3.4	MIT
 argon2	0.6.0	MIT OR Apache-2.0
@@ -66,10 +68,13 @@ bitflags	1.3.2	MIT/Apache-2.0
 bitflags	2.13.2	MIT OR Apache-2.0
 bitstream-io	4.10.0	MIT/Apache-2.0
 blake2	0.11.0	MIT OR Apache-2.0
+block	0.1.6	MIT
 block-buffer	0.10.4	MIT OR Apache-2.0
 block-buffer	0.12.1	MIT OR Apache-2.0
 block-padding	0.3.3	MIT OR Apache-2.0
 block-padding	0.4.2	MIT OR Apache-2.0
+block2	0.5.1	MIT
+block2	0.6.2	MIT
 blocking	1.7.0	Apache-2.0 OR MIT
 blowfish	0.10.0	MIT OR Apache-2.0
 bstr	1.13.1	MIT OR Apache-2.0
@@ -84,6 +89,7 @@ calloop	0.14.5	MIT
 calloop-wayland-source	0.4.1	MIT
 cbc	0.1.2	MIT OR Apache-2.0
 cbc	0.2.1	MIT OR Apache-2.0
+cbindgen	0.28.0	MPL-2.0
 cc	1.9.0	MIT OR Apache-2.0
 cfg-if	1.0.5	MIT OR Apache-2.0
 cfg_aliases	0.1.1	MIT
@@ -97,6 +103,8 @@ clap_builder	4.6.7	MIT OR Apache-2.0
 clap_derive	4.6.7	MIT OR Apache-2.0
 clap_lex	1.1.1	MIT OR Apache-2.0
 cmov	0.5.4	Apache-2.0 OR MIT
+cocoa	0.26.1	MIT OR Apache-2.0
+cocoa-foundation	0.2.1	MIT OR Apache-2.0
 codespan-reporting	0.13.1	Apache-2.0
 color_quant	1.1.0	MIT
 colorchoice	1.0.5	MIT OR Apache-2.0
@@ -105,6 +113,11 @@ const-oid	0.10.2	Apache-2.0 OR MIT
 const-random	0.1.18	MIT OR Apache-2.0
 const-random-macro	0.1.16	MIT OR Apache-2.0
 convert_case	0.10.0	MIT
+core-foundation	0.10.1	MIT OR Apache-2.0
+core-foundation-sys	0.8.7	MIT OR Apache-2.0
+core-graphics	0.24.0	MIT OR Apache-2.0
+core-graphics-types	0.2.0	MIT OR Apache-2.0
+core-text	21.0.0	MIT OR Apache-2.0
 core_detect	1.0.0	MIT/Apache-2.0
 core_maths	0.1.1	MIT
 cosmic-text	0.19.0	MIT OR Apache-2.0
@@ -143,6 +156,7 @@ dirs	6.0.0	MIT OR Apache-2.0
 dirs	7.0.0	MIT OR Apache-2.0
 dirs-sys	0.4.1	MIT OR Apache-2.0
 dirs-sys	0.5.0	MIT OR Apache-2.0
+dispatch2	0.3.1	Zlib OR Apache-2.0 OR MIT
 displaydoc	0.2.7	MIT OR Apache-2.0
 dlib	0.5.3	MIT
 document-features	0.2.12	MIT OR Apache-2.0
@@ -192,8 +206,12 @@ font-types	0.11.3	MIT OR Apache-2.0
 font-types	0.12.7	MIT OR Apache-2.0
 fontconfig-parser	0.5.8	MIT
 fontdb	0.23.0	MIT
+foreign-types	0.5.0	MIT/Apache-2.0
+foreign-types-macros	0.2.4	MIT/Apache-2.0
+foreign-types-shared	0.3.1	MIT/Apache-2.0
 form_urlencoded	1.2.2	MIT OR Apache-2.0
 freetype-sys	0.20.1	MIT
+fsevent-sys	4.1.0	MIT
 futf	0.1.5	MIT / Apache-2.0
 futures	0.3.34	MIT OR Apache-2.0
 futures-channel	0.3.34	MIT OR Apache-2.0
@@ -228,10 +246,12 @@ gpui-component-macros	0.8.0	Apache-2.0
 gpui-kit	0.8.0	Apache-2.0
 gpui-kit-assets	0.8.0	Apache-2.0
 gpui-pre	0.3.9	Apache-2.0
+gpui-pre-apple	0.3.9	Apache-2.0
 gpui-pre-collections	0.3.9	Apache-2.0
 gpui-pre-derive-refineable	0.3.9	Apache-2.0
 gpui-pre-http-client	0.3.9	Apache-2.0
 gpui-pre-linux	0.3.9	Apache-2.0
+gpui-pre-macos	0.3.9	Apache-2.0
 gpui-pre-macros	0.3.9	Apache-2.0
 gpui-pre-platform	0.3.9	Apache-2.0
 gpui-pre-refineable	0.3.9	Apache-2.0
@@ -253,6 +273,7 @@ hashbrown	0.15.5	MIT OR Apache-2.0
 hashbrown	0.16.1	MIT OR Apache-2.0
 hashbrown	0.17.1	MIT OR Apache-2.0
 heapless	0.9.3	MIT OR Apache-2.0
+heck	0.4.1	MIT OR Apache-2.0
 heck	0.5.0	MIT OR Apache-2.0
 hex	0.4.3	MIT OR Apache-2.0
 hex-literal	1.1.0	MIT OR Apache-2.0
@@ -325,6 +346,8 @@ lyon_geom	1.0.20	MIT OR Apache-2.0
 lyon_path	1.0.19	MIT OR Apache-2.0
 lyon_tessellation	1.0.23	MIT OR Apache-2.0
 mac	0.1.1	MIT/Apache-2.0
+mach2	0.6.0	BSD-2-Clause OR MIT OR Apache-2.0
+malloc_buf	0.0.6	MIT
 markdown	1.0.0	MIT
 markup5ever	0.12.1	MIT OR Apache-2.0
 markup5ever_rcdom	0.3.0	MIT OR Apache-2.0
@@ -334,6 +357,7 @@ md-5	0.10.6	MIT OR Apache-2.0
 md5	0.8.1	Apache-2.0 OR MIT
 memchr	2.8.3	Unlicense OR MIT
 memmap2	0.9.11	MIT OR Apache-2.0
+metal	0.33.0	MIT OR Apache-2.0
 mime	0.3.17	MIT OR Apache-2.0
 mime_guess	2.0.5	MIT
 miniz_oxide	0.8.9	MIT OR Zlib OR Apache-2.0
@@ -371,6 +395,32 @@ num-iter	0.1.46	MIT OR Apache-2.0
 num-rational	0.4.2	MIT OR Apache-2.0
 num-traits	0.2.19	MIT OR Apache-2.0
 num_cpus	1.17.0	MIT OR Apache-2.0
+objc	0.2.7	MIT
+objc-sys	0.3.5	MIT
+objc2	0.5.3	MIT
+objc2	0.6.5	MIT
+objc2-app-kit	0.2.2	MIT
+objc2-app-kit	0.3.2	Zlib OR Apache-2.0 OR MIT
+objc2-cloud-kit	0.3.2	Zlib OR Apache-2.0 OR MIT
+objc2-core-data	0.2.2	MIT
+objc2-core-data	0.3.2	Zlib OR Apache-2.0 OR MIT
+objc2-core-foundation	0.3.2	Zlib OR Apache-2.0 OR MIT
+objc2-core-graphics	0.3.2	Zlib OR Apache-2.0 OR MIT
+objc2-core-image	0.2.2	MIT
+objc2-core-image	0.3.2	Zlib OR Apache-2.0 OR MIT
+objc2-core-text	0.3.2	Zlib OR Apache-2.0 OR MIT
+objc2-core-video	0.3.2	Zlib OR Apache-2.0 OR MIT
+objc2-encode	4.1.0	MIT
+objc2-foundation	0.2.2	MIT
+objc2-foundation	0.3.2	MIT
+objc2-io-surface	0.3.2	Zlib OR Apache-2.0 OR MIT
+objc2-metal	0.2.2	MIT
+objc2-metal	0.3.2	Zlib OR Apache-2.0 OR MIT
+objc2-quartz-core	0.2.2	MIT
+objc2-quartz-core	0.3.2	Zlib OR Apache-2.0 OR MIT
+objc2-security	0.3.2	Zlib OR Apache-2.0 OR MIT
+objc2-user-notifications	0.3.2	Zlib OR Apache-2.0 OR MIT
+objc_exception	0.1.2	MIT
 object	0.37.3	Apache-2.0 OR MIT
 once_cell	1.21.4	MIT OR Apache-2.0
 once_cell_polyfill	1.70.2	MIT OR Apache-2.0
@@ -503,6 +553,8 @@ scrypt	0.12.0	MIT OR Apache-2.0
 seahash	4.1.0	MIT
 sec1	0.8.1	Apache-2.0 OR MIT
 secret-service	5.2.0	MIT OR Apache-2.0
+security-framework	3.7.0	MIT OR Apache-2.0
+security-framework-sys	2.17.0	MIT OR Apache-2.0
 self_cell	1.3.0	Apache-2.0 OR GPL-2.0-only
 semver	1.0.28	MIT OR Apache-2.0
 serde	1.0.229	MIT OR Apache-2.0
@@ -578,6 +630,7 @@ synstructure	0.14.0	MIT
 sys-locale	0.3.2	MIT OR Apache-2.0
 sysinfo	0.31.4	MIT
 taffy	0.13.0	MIT
+tempfile	3.27.0	MIT OR Apache-2.0
 tendril	0.4.3	MIT/Apache-2.0
 termcolor	1.4.1	Unlicense OR MIT
 thiserror	1.0.69	MIT OR Apache-2.0
@@ -704,17 +757,13 @@ windows-result	0.4.1	MIT OR Apache-2.0
 windows-strings	0.1.0	MIT OR Apache-2.0
 windows-strings	0.4.2	MIT OR Apache-2.0
 windows-strings	0.5.1	MIT OR Apache-2.0
-windows-sys	0.48.0	MIT OR Apache-2.0
-windows-sys	0.52.0	MIT OR Apache-2.0
 windows-sys	0.59.0	MIT OR Apache-2.0
 windows-sys	0.60.2	MIT OR Apache-2.0
 windows-sys	0.61.2	MIT OR Apache-2.0
-windows-targets	0.48.5	MIT OR Apache-2.0
 windows-targets	0.52.6	MIT OR Apache-2.0
 windows-targets	0.53.5	MIT OR Apache-2.0
 windows-threading	0.1.0	MIT OR Apache-2.0
 windows-threading	0.2.1	MIT OR Apache-2.0
-windows_x86_64_msvc	0.48.5	MIT OR Apache-2.0
 windows_x86_64_msvc	0.52.6	MIT OR Apache-2.0
 windows_x86_64_msvc	0.53.1	MIT OR Apache-2.0
 winnow	0.7.15	MIT

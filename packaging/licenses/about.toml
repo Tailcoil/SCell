@@ -18,6 +18,11 @@ accepted = [
     "Unlicense",
     "Zlib",
 ]
-targets = ["x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "x86_64-pc-windows-msvc",
+    "aarch64-apple-darwin",
+    "x86_64-apple-darwin",
+]
 ignore-build-dependencies = false
 ignore-dev-dependencies = true
