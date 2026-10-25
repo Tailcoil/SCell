@@ -71,8 +71,10 @@ pub(crate) async fn run(tx: flume::Sender<MetricsUpdate>, mut stop: oneshot::Rec
         let mut processes: Vec<ProcessUsage> = if first {
             Vec::new()
         } else {
+            // Linux 上 sysinfo 把各线程也列为进程，内存取的是整个进程的值，会重复出现
             sys.processes()
                 .iter()
+                .filter(|(_, p)| p.thread_kind().is_none())
                 .map(|(pid, p)| ProcessUsage {
                     pid: pid.as_u32(),
                     name: p.name().to_string_lossy().into_owned(),
