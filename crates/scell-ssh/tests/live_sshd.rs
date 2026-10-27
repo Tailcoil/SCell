@@ -370,3 +370,106 @@ async fn port_forwards_reach_echo_server() {
     );
     drop((remote, socks));
 }
+
+/// 在本机与 sshd 之间转发字节的中继。冻结后两个方向都停止读取但不关闭连接，模拟对端静默失效
+/// （断网、NAT 映射过期）：客户端收不到任何数据，发出的数据积在缓冲区里。
+async fn freezable_relay(target: &Endpoint) -> (u16, Arc<tokio::sync::Notify>) {
+    use tokio::net::{TcpListener, TcpStream};
+    let listener = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let freeze = Arc::new(tokio::sync::Notify::new());
+    let (host, target_port) = (target.host.clone(), target.port);
+    let frozen = freeze.clone();
+    tokio::spawn(async move {
+        let (client, _) = listener.accept().await.unwrap();
+        let server = TcpStream::connect((host.as_str(), target_port))
+            .await
+            .unwrap();
+        let (mut cr, mut cw) = client.into_split();
+        let (mut sr, mut sw) = server.into_split();
+        tokio::select! {
+            _ = async {
+                tokio::join!(
+                    tokio::io::copy(&mut cr, &mut sw),
+                    tokio::io::copy(&mut sr, &mut cw),
+                )
+            } => {}
+            () = frozen.notified() => {}
+        }
+        // 保持四个半连接不释放
+        std::future::pending::<()>().await;
+        drop((cr, cw, sr, sw));
+    });
+    (port, freeze)
+}
+
+async fn connect_through_relay(name: &str) -> (Connection, Arc<tokio::sync::Notify>) {
+    let env = env();
+    let (port, freeze) = freezable_relay(&env.params.endpoint).await;
+    let mut params = env.params.clone();
+    params.endpoint = Endpoint::new("127.0.0.1", port);
+    params.keepalive = Some(std::time::Duration::from_millis(500));
+    params.keepalive_max = 2;
+    let file = temp_known_hosts(name);
+    let verifier = Arc::new(Recorder {
+        file: file.clone(),
+        seen: Mutex::default(),
+    });
+    let conn = Connection::connect(&params, file, verifier)
+        .await
+        .expect("经中继连接");
+    (conn, freeze)
+}
+
+#[tokio::test]
+#[ignore]
+async fn unresponsive_peer_is_detected() {
+    let (conn, freeze) = connect_through_relay("frozen-idle").await;
+    let mut shell = conn.open_shell("xterm", 80, 24).await.expect("shell");
+    // 空闲期间探测有回音，连接保持
+    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+    assert!(!conn.is_closed(), "正常连接不应被判定无响应");
+
+    freeze.notify_one();
+    let closed = async {
+        loop {
+            if shell.next_event().await == ShellEvent::Closed {
+                break;
+            }
+        }
+    };
+    tokio::time::timeout(std::time::Duration::from_secs(5), closed)
+        .await
+        .expect("冻结后应在几个探测周期内判定断开");
+    assert!(conn.is_closed());
+    assert!(conn.timed_out());
+    assert!(!conn.probe(std::time::Duration::from_secs(1)).await);
+}
+
+#[tokio::test]
+#[ignore]
+async fn write_to_frozen_peer_does_not_hang() {
+    let (conn, freeze) = connect_through_relay("frozen-write").await;
+    let shell = conn.open_shell("xterm", 80, 24).await.expect("shell");
+    freeze.notify_one();
+    // 远超通道窗口与 socket 缓冲：写入会卡在等窗口、russh 主循环会卡在写 socket 上
+    let big = vec![b'x'; 16 * 1024 * 1024];
+    let result = tokio::time::timeout(std::time::Duration::from_secs(10), shell.write(&big))
+        .await
+        .expect("连接判定断开后写入应返回");
+    assert!(result.is_err());
+    assert!(conn.timed_out());
+}
+
+#[tokio::test]
+#[ignore]
+async fn probe_reports_frozen_peer() {
+    let (conn, freeze) = connect_through_relay("frozen-probe").await;
+    let probe = std::time::Duration::from_millis(300);
+    tokio::time::sleep(probe).await;
+    assert!(conn.probe(probe).await, "正常连接应探测通过");
+    freeze.notify_one();
+    tokio::time::sleep(probe).await;
+    assert!(!conn.probe(probe).await, "冻结后探测应失败");
+    assert!(conn.is_closed(), "探测失败应断开连接");
+}

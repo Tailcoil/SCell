@@ -69,8 +69,8 @@ pub(crate) enum SshMode {
 /// 测延迟时等待回复的上限，超过即视为没有结果。
 const PING_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// 文件会话检查连接是否断开的间隔。
-const LINK_POLL: Duration = Duration::from_secs(2);
+/// 复用池中连接前确认其仍有响应的等待上限。
+const REUSE_PROBE: Duration = Duration::from_secs(3);
 
 /// SSH 会话共用的服务级资源。
 #[derive(Clone)]
@@ -480,22 +480,20 @@ impl SshSession {
         }
         // 连接（及其跳板）要活到 shell 结束；其他会话或 SFTP 仍在用时不会真正断开
         self.link.lock().take();
+        let reason = lost_reason(&link);
         drop(link);
         match code {
             Some(code) => Ended::Exit(code),
             None => {
                 notice(
                     &self.shared,
-                    &format!(
-                        "{RESET_MODES}\r\n\x1b[2m{}\x1b[0m",
-                        t!("session.connection_lost")
-                    ),
+                    &format!("{RESET_MODES}\r\n\x1b[2m{reason}\x1b[0m"),
                 );
                 Ended::Lost {
                     transient: true,
                     connected: true,
                     stable: established.elapsed() >= STABLE_AFTER,
-                    reason: t!("session.connection_lost").into(),
+                    reason,
                 }
             }
         }
@@ -508,15 +506,13 @@ impl SshSession {
         self.shared.emit(SessionEvent::Connected(id));
         tracing::info!(session = %id, host = %self.target.host.name, "文件会话已建立");
         let established = std::time::Instant::now();
-        while !link.conn.is_closed() {
-            tokio::time::sleep(LINK_POLL).await;
-        }
+        link.conn.closed().await;
         self.link.lock().take();
         Ended::Lost {
             transient: true,
             connected: true,
             stable: established.elapsed() >= STABLE_AFTER,
-            reason: t!("session.connection_lost").into(),
+            reason: lost_reason(&link),
         }
     }
 
@@ -551,6 +547,15 @@ impl SshSession {
     }
 }
 
+/// 连接断开的原因：对端无响应时单独说明，便于和服务器主动断开区分。
+fn lost_reason(link: &Link) -> String {
+    if link.conn.timed_out() {
+        t!("session.connection_timeout").into()
+    } else {
+        t!("session.connection_lost").into()
+    }
+}
+
 fn resolved_user(host: &HostProfile) -> String {
     host.user
         .clone()
@@ -558,7 +563,7 @@ fn resolved_user(host: &HostProfile) -> String {
         .unwrap_or_default()
 }
 
-/// 逐跳建立连接，已在池中且存活的直接复用。返回目标主机这一跳，以及它是否为复用的。
+/// 逐跳建立连接，已在池中且仍有响应的直接复用。返回目标主机这一跳，以及它是否为复用的。
 async fn connect_chain(
     target: &SshTarget,
     ui: &Arc<Interaction>,
@@ -572,7 +577,10 @@ async fn connect_chain(
         // 持锁直到这一跳登记进池（含等待用户确认主机密钥、输入密码），同一主机不会被并发重复连接与提问
         let gate = pool.gate(&key);
         let _guard = gate.lock().await;
-        if let Some(link) = pool.get(&key) {
+        // 静默失效的连接要等看门狗判定才会关闭，复用前先探一次，免得新会话卡在开通道上
+        if let Some(link) = pool.get(&key)
+            && link.conn.probe(REUSE_PROBE).await
+        {
             parent = Some(link);
             reused = true;
             continue;
