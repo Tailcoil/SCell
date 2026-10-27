@@ -85,7 +85,7 @@ fn loadavg(line: &str) -> Option<[f32; 3]> {
 }
 
 /// `/proc/stat` 的 `cpu` 汇总行：返回（总计，空闲 + iowait）。guest 时间已含在 user 中，不重复计。
-fn cpu(line: &str) -> Option<(u64, u64)> {
+pub(super) fn cpu(line: &str) -> Option<(u64, u64)> {
     let mut it = line.split_whitespace();
     if it.next()? != "cpu" {
         return None;

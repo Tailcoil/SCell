@@ -165,12 +165,7 @@ impl Rates {
             processes: Vec::new(),
         };
         if let Some((then, prev)) = &self.prev {
-            if let (Some((t1, i1)), Some((t0, i0))) = (raw.cpu, prev.cpu)
-                && t1 > t0
-            {
-                let busy = (t1 - t0).saturating_sub(i1.saturating_sub(i0));
-                m.cpu = Some((busy as f64 / (t1 - t0) as f64) as f32);
-            }
+            m.cpu = cpu_ratio(raw.cpu, prev.cpu);
             let secs = at.duration_since(*then).as_secs_f64();
             if let (Some((r1, x1)), Some((r0, x0))) = (raw.net, prev.net)
                 && secs > 0.
@@ -188,4 +183,14 @@ impl Rates {
         self.prev = Some((at, raw));
         m
     }
+}
+
+/// 两次 `/proc/stat` 采样（总计，空闲）之间的 CPU 占用比例。
+fn cpu_ratio(now: Option<(u64, u64)>, before: Option<(u64, u64)>) -> Option<f32> {
+    let ((t1, i1), (t0, i0)) = (now?, before?);
+    if t1 <= t0 {
+        return None;
+    }
+    let busy = (t1 - t0).saturating_sub(i1.saturating_sub(i0));
+    Some((busy as f64 / (t1 - t0) as f64) as f32)
 }
