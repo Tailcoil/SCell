@@ -72,7 +72,10 @@ pub struct ConnectParams {
     pub endpoint: Endpoint,
     pub user: String,
     pub auth: Vec<AuthMethod>,
+    /// 连续这么久收不到任何数据就发一次探测（对应 OpenSSH 的 `ServerAliveInterval`）；`None` 不探测。
     pub keepalive: Option<Duration>,
+    /// 连续这么多次探测没有回音即判定连接无响应并断开（对应 `ServerAliveCountMax`）。
+    pub keepalive_max: u32,
     pub connect_timeout: Duration,
     /// 未设置时需要询问的方法（密码、keyboard-interactive、加密私钥）都会被跳过。
     pub prompter: Option<Arc<dyn Prompter>>,
@@ -87,6 +90,7 @@ impl std::fmt::Debug for ConnectParams {
             .field("endpoint", &self.endpoint)
             .field("user", &self.user)
             .field("keepalive", &self.keepalive)
+            .field("keepalive_max", &self.keepalive_max)
             .field("connect_timeout", &self.connect_timeout)
             .finish_non_exhaustive()
     }
@@ -98,7 +102,8 @@ impl ConnectParams {
             endpoint,
             user: user.into(),
             auth,
-            keepalive: Some(Duration::from_secs(30)),
+            keepalive: Some(Duration::from_secs(15)),
+            keepalive_max: 2,
             connect_timeout: Duration::from_secs(15),
             prompter: None,
             agent_socket: None,

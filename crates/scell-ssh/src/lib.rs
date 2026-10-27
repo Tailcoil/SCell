@@ -11,6 +11,7 @@ mod connect;
 mod error;
 mod forward;
 mod known_hosts;
+mod liveness;
 mod params;
 
 pub use channel::{ShellChannel, ShellEvent};
@@ -18,6 +19,7 @@ pub use connect::Connection;
 pub use error::SshError;
 pub use forward::{Forward, ForwardStats};
 pub use known_hosts::{HostKeyStatus, HostKeyVerifier, KnownHostsFile, fingerprint};
+pub use liveness::Guarded;
 pub use params::{
     AuthMethod, BoxFuture, ConnectParams, Endpoint, InteractivePrompt, InteractiveRequest, Prompter,
 };

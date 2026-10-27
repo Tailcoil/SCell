@@ -12,6 +12,9 @@ session:
   connection_lost:
     en: Connection lost
     zh-CN: 连接已断开
+  connection_timeout:
+    en: "Connection lost: server not responding"
+    zh-CN: 连接已断开：服务器无响应
   hop_failed:
     en: "%{host}: %{err}"
     zh-CN: "%{host}：%{err}"

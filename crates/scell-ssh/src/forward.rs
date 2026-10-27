@@ -13,9 +13,11 @@ use russh::client::{Handle, Msg};
 use russh::{Channel, ChannelOpenFailure};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
+use tokio_util::sync::CancellationToken;
 
 use crate::SshError;
 use crate::connect::ClientHandler;
+use crate::liveness::Guarded;
 
 /// 转发的流量统计。
 #[derive(Debug, Default)]
@@ -72,11 +74,17 @@ impl Drop for Forward {
     }
 }
 
-/// 在两端之间转发字节，结束时计入统计。
-async fn pipe(tcp: TcpStream, channel: Channel<Msg>, stats: Arc<ForwardStats>) {
+/// 在两端之间转发字节，结束时计入统计。SSH 连接断开（`dead`）时两个方向立即结束。
+async fn pipe(
+    tcp: TcpStream,
+    channel: Channel<Msg>,
+    stats: Arc<ForwardStats>,
+    dead: CancellationToken,
+) {
     stats.active.fetch_add(1, Ordering::Relaxed);
     let (mut tcp_read, mut tcp_write) = tcp.into_split();
-    let (mut ssh_read, mut ssh_write) = tokio::io::split(channel.into_stream());
+    let (mut ssh_read, mut ssh_write) =
+        tokio::io::split(Guarded::channel(channel.into_stream(), &dead));
     // 一个方向读到结尾后关闭对端的写入，另一方向继续直到对方也结束
     tokio::join!(
         async {
@@ -118,6 +126,7 @@ async fn listen(host: &str, port: u16) -> Result<TcpListener, SshError> {
 
 pub(crate) async fn local(
     handle: Arc<Handle<ClientHandler>>,
+    dead: CancellationToken,
     bind: (&str, u16),
     target: (String, u16),
 ) -> Result<Forward, SshError> {
@@ -127,14 +136,19 @@ pub(crate) async fn local(
     let task_stats = stats.clone();
     let task = tokio::spawn(async move {
         while let Ok((tcp, peer)) = listener.accept().await {
-            let (handle, target, stats) = (handle.clone(), target.clone(), task_stats.clone());
+            let (handle, target, stats, dead) = (
+                handle.clone(),
+                target.clone(),
+                task_stats.clone(),
+                dead.clone(),
+            );
             tokio::spawn(async move {
                 let origin = (peer.ip().to_string(), u32::from(peer.port()));
                 match handle
                     .channel_open_direct_tcpip(target.0, u32::from(target.1), origin.0, origin.1)
                     .await
                 {
-                    Ok(channel) => pipe(tcp, channel, stats).await,
+                    Ok(channel) => pipe(tcp, channel, stats, dead).await,
                     Err(e) => tracing::debug!(%e, "本地转发：远端拒绝连接"),
                 }
             });
@@ -150,6 +164,7 @@ pub(crate) async fn local(
 
 pub(crate) async fn dynamic(
     handle: Arc<Handle<ClientHandler>>,
+    dead: CancellationToken,
     bind: (&str, u16),
 ) -> Result<Forward, SshError> {
     let listener = listen(bind.0, bind.1).await?;
@@ -158,9 +173,9 @@ pub(crate) async fn dynamic(
     let task_stats = stats.clone();
     let task = tokio::spawn(async move {
         while let Ok((tcp, peer)) = listener.accept().await {
-            let (handle, stats) = (handle.clone(), task_stats.clone());
+            let (handle, stats, dead) = (handle.clone(), task_stats.clone(), dead.clone());
             tokio::spawn(async move {
-                if let Err(e) = socks5(tcp, peer, handle, stats).await {
+                if let Err(e) = socks5(tcp, peer, handle, stats, dead).await {
                     tracing::debug!(%e, "SOCKS5 请求失败");
                 }
             });
@@ -180,6 +195,7 @@ async fn socks5(
     peer: std::net::SocketAddr,
     handle: Arc<Handle<ClientHandler>>,
     stats: Arc<ForwardStats>,
+    dead: CancellationToken,
 ) -> std::io::Result<()> {
     let bad = |m: &str| std::io::Error::new(std::io::ErrorKind::InvalidData, m.to_owned());
     // 问候：版本、方法数、方法列表；只接受“无需认证”
@@ -239,7 +255,7 @@ async fn socks5(
     {
         Ok(channel) => {
             tcp.write_all(&reply(0)).await?;
-            pipe(tcp, channel, stats).await;
+            pipe(tcp, channel, stats, dead).await;
             Ok(())
         }
         Err(e) => {
@@ -287,6 +303,7 @@ pub(crate) fn accept_remote(
     channel: Channel<Msg>,
     port: u32,
     reply: russh::client::ChannelOpenHandle,
+    dead: CancellationToken,
 ) {
     let route = routes
         .lock()
@@ -300,7 +317,7 @@ pub(crate) fn accept_remote(
         match TcpStream::connect((host.as_str(), target_port)).await {
             Ok(tcp) => {
                 reply.accept().await;
-                pipe(tcp, channel, stats).await;
+                pipe(tcp, channel, stats, dead).await;
             }
             Err(e) => {
                 tracing::debug!(%e, host, target_port, "远程转发：本地目标连不上");
