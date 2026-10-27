@@ -42,11 +42,16 @@ impl AppState {
     }
 }
 
-pub fn init(cx: &mut App, sessions: SessionService, events: flume::Receiver<SessionEvent>) {
+pub fn init(
+    cx: &mut App,
+    sessions: SessionService,
+    events: flume::Receiver<SessionEvent>,
+    font: crate::BundledFont,
+) {
     // 先按系统语言，读取配置时产生的提示也能本地化；设置里另选了语言时由外观应用时切换
     apply_locale(None);
     config::init(cx);
-    crate::fonts::init(cx);
+    crate::fonts::init(cx, font);
     appearance::init(cx);
     crate::fonts::prewarm(cx);
     shells::init(cx);

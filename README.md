@@ -60,4 +60,4 @@ cargo build --release
 
 ## License
 
-[Apache-2.0](LICENSE). The Catppuccin theme uses the [Catppuccin](https://catppuccin.com) palette.
+[Apache-2.0](LICENSE). The Catppuccin theme uses the [Catppuccin](https://catppuccin.com) palette. The bundled font SCell Mono is a modified [Maple Mono](https://github.com/subframe7536/maple-font) under the [SIL Open Font License 1.1](crates/scell-ui/assets/fonts/OFL.txt).

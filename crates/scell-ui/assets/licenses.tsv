@@ -1,3 +1,4 @@
+Maple Mono	7.9	OFL-1.1
 accesskit	0.24.1	MIT OR Apache-2.0
 accesskit_atspi_common	0.19.1	MIT OR Apache-2.0
 accesskit_consumer	0.38.0	MIT OR Apache-2.0
@@ -811,6 +812,9 @@ zip	8.6.0	MIT
 zlib-rs	0.6.8	Zlib
 zmij	1.0.23	MIT
 zopfli	0.8.4	Apache-2.0
+zstd	0.13.3	MIT
+zstd-safe	7.3.0	BSD-3-Clause
+zstd-sys	2.1.2+zstd.1.5.7	BSD-3-Clause
 zune-core	0.4.12	MIT OR Apache-2.0 OR Zlib
 zune-core	0.5.3	MIT OR Apache-2.0 OR Zlib
 zune-inflate	0.2.54	MIT OR Apache-2.0 OR Zlib

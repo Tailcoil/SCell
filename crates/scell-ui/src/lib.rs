@@ -23,4 +23,5 @@ mod workspace;
 
 pub use app::{init, open_main_window};
 pub use assets::Assets;
+pub use fonts::BundledFont;
 pub use updates::run_installer_hooks;

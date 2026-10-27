@@ -7,6 +7,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::ConfigError;
 
+/// 随程序内置的字体（由 Maple Mono 合成，含中日文与 Nerd Font 图标），界面与终端默认都用它。
+pub const BUNDLED_FONT: &str = "SCell Mono";
+
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(default)]
 #[non_exhaustive]
@@ -51,7 +54,7 @@ pub struct Appearance {
     pub window: WindowMaterial,
     /// 窗口背景不透明度，仅对非 `opaque` 材质生效。
     pub opacity: f32,
-    /// 界面字体；未设置时跟随系统。终端字体见 `[terminal]`。
+    /// 界面字体；未设置时用内置字体。终端字体见 `[terminal]`。
     pub ui_font: Option<String>,
     /// 界面基准字号（逻辑像素）；文字与按 rem 计的间距随之缩放。未设置时跟随系统。
     pub ui_font_size: Option<f32>,
@@ -133,7 +136,7 @@ pub fn spelling<T: Serialize>(value: &T) -> String {
 #[non_exhaustive]
 pub struct TerminalSettings {
     pub font_family: String,
-    /// 主字体缺字时依次尝试，用于 CJK、Emoji 与图标。
+    /// 主字体缺字时依次尝试；之后仍缺的字由系统回退。内置字体已含中日文与图标。
     pub font_fallbacks: Vec<String>,
     pub font_size: f32,
     /// 行高相对字号的倍数。
@@ -149,12 +152,8 @@ pub struct TerminalSettings {
 impl Default for TerminalSettings {
     fn default() -> Self {
         Self {
-            font_family: "FiraCode Nerd Font Mono".into(),
-            font_fallbacks: vec![
-                "Noto Sans Mono CJK SC".into(),
-                "WenQuanYi Zen Hei Mono".into(),
-                "Noto Color Emoji".into(),
-            ],
+            font_family: BUNDLED_FONT.into(),
+            font_fallbacks: Vec::new(),
             font_size: 14.,
             line_height: 1.25,
             scrollback: 10_000,
