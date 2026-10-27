@@ -15,7 +15,7 @@ use gpui_kit::{
 use rust_i18n::t;
 use scell_config::Settings as Config;
 use scell_config::settings::{
-    CursorStyle, FileSettings, TerminalSettings, ThemeChoice, Value, WindowMaterial,
+    BUNDLED_FONT, CursorStyle, FileSettings, TerminalSettings, ThemeChoice, Value, WindowMaterial,
 };
 use scell_config::settings::{limits, spelling};
 use std::path::{Path, PathBuf};
@@ -234,20 +234,24 @@ fn appearance(window: &mut Window, cx: &mut App) -> Vec<AnyElement> {
     vec![section(None, rows, cx), interface(window, cx)]
 }
 
-/// 界面字体、字号与动画。未设置时跟随系统，下拉中的“跟随系统”附上实际字体名。
+/// 界面字体、字号与动画。字体未设置时用内置字体，字号未设置时跟随系统。
 fn interface(window: &mut Window, cx: &mut App) -> AnyElement {
     let system = fonts::system(cx).clone();
-    // 按钮上只写“跟随系统”，实际字体在菜单里作为说明，长字体名不会撑宽按钮
     let families = std::iter::once(Choice {
         value: None,
-        label: label("follow_system"),
-        detail: system.family.clone().map(Into::into),
-    })
-    .chain(fonts::families(cx).into_iter().map(|f| Choice {
-        value: Some(f.clone()),
-        label: f.into(),
+        label: BUNDLED_FONT.into(),
         detail: None,
-    }))
+    })
+    .chain(
+        fonts::families(cx)
+            .into_iter()
+            .filter(|f| f != BUNDLED_FONT)
+            .map(|f| Choice {
+                value: Some(f.clone()),
+                label: f.into(),
+                detail: None,
+            }),
+    )
     .collect();
     let (current, animated) = {
         let a = &settings(cx).appearance;

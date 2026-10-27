@@ -33,6 +33,8 @@ enum Cmd {
         #[arg(long)]
         check: bool,
     },
+    /// 由 Maple Mono 合成内置字体 SCell Mono（需要 uv），输出到 crates/scell-ui/assets/fonts。
+    Fonts,
     /// 构建 release 并打包到 target/dist。
     Dist {
         #[arg(long, value_enum, value_delimiter = ',', default_value = "archive")]
@@ -64,6 +66,12 @@ fn main() -> anyhow::Result<()> {
         } => sshd_down(),
         Cmd::It { port } => integration(port),
         Cmd::Licenses { check } => licenses::licenses(dist::workspace_root()?, check),
+        Cmd::Fonts => {
+            let root = dist::workspace_root()?;
+            run(Command::new("uv")
+                .arg("run")
+                .arg(root.join("xtask/fonts/build.py")))
+        }
         Cmd::Dist { format } => dist::dist(&format),
     }
 }

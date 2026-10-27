@@ -9,7 +9,7 @@ use std::rc::Rc;
 
 use gpui_kit::component::{ActiveTheme, Theme, ThemeConfig, ThemeSet};
 use gpui_kit::{App, Global, Hsla, Rgba, WindowBackgroundAppearance, px, transparent_black};
-use scell_config::settings::{CursorStyle, TerminalSettings, WindowMaterial, limits};
+use scell_config::settings::{BUNDLED_FONT, CursorStyle, TerminalSettings, WindowMaterial, limits};
 use scell_config::theme::{HexColor, TerminalColors, parse_theme_set};
 use scell_term::{CursorShape, Palette, Rgb};
 use scell_term_view::TerminalStyle;
@@ -170,14 +170,18 @@ pub(crate) fn apply(cx: &mut App) {
         _ => (settings.appearance.opacity, GLASS_CARD_ALPHA),
     };
 
-    // 界面字体：设置优先，其次系统；字号决定 rem，界面按 rem 计的间距随之缩放
-    let system = crate::fonts::system(cx).clone();
-    let ui_font = settings.appearance.ui_font.clone().or(system.family);
-    let ui_size = settings.appearance.ui_font_size.or(system.size);
+    // 界面字体：设置优先，其次内置字体；字号设置优先，其次系统。字号决定 rem，界面按 rem 计的间距随之缩放
+    let ui_font = settings
+        .appearance
+        .ui_font
+        .clone()
+        .unwrap_or_else(|| BUNDLED_FONT.into());
+    let ui_size = settings
+        .appearance
+        .ui_font_size
+        .or(crate::fonts::system(cx).size);
     Theme::update(cx, |theme| {
-        if let Some(family) = ui_font {
-            theme.font_family = family.into();
-        }
+        theme.font_family = ui_font.into();
         if let Some(size) = ui_size {
             theme.font_size = px(size);
         }

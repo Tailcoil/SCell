@@ -44,6 +44,8 @@ fn main() -> anyhow::Result<()> {
     scell_ui::run_installer_hooks();
     let gpu = gpu::avoid_discrete_gpu();
     let cli = Cli::parse();
+    // 解压内置字体与下面的初始化并行
+    let font = scell_ui::BundledFont::load();
     let logs = scell_config::ConfigPaths::discover().map(|p| p.logs_dir());
     let _log_guard = init_logging(&cli.log, logs.as_deref());
     if let Some(dir) = logs {
@@ -75,7 +77,7 @@ fn main() -> anyhow::Result<()> {
         .with_assets(scell_ui::Assets)
         .run(move |cx| {
             gpui_kit::init(cx);
-            scell_ui::init(cx, sessions, events);
+            scell_ui::init(cx, sessions, events, font);
             if let Err(err) = scell_ui::open_main_window(first_shell, cx) {
                 tracing::error!(%err, "无法打开主窗口");
                 cx.quit();

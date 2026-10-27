@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/*", "xtask"]
 default-members = ["crates/scell"]
 # 补丁副本不是工作区成员，不受本项目的 lint 与格式化约束
-exclude = ["patches/gpui-component"]
+exclude = ["patches/gpui-component", "patches/gpui-pre-wgpu"]
 
 [workspace.package]
 version = "0.2.0"
@@ -71,6 +71,8 @@ thiserror = "2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-appender = "0.2"
+# 内置字体以 zstd 压缩随程序分发
+zstd = { version = "0.13", default-features = false }
 
 [workspace.lints.rust]
 unsafe_code = "deny"
@@ -101,3 +103,6 @@ debug = "line-tables-only"
 # 并导出 `window_corner_radii` 供模糊区域使用。改动处以“SCell 补丁”注释标出；升级 gpui-kit 时需要在新版上重做
 [patch.crates-io]
 gpui-component = { path = "patches/gpui-component" }
+# gpui-pre-wgpu 0.3.9 的补丁副本（Linux 文本系统）：可变字体按请求的字重排版与光栅化（原版总取默认实例，
+# 粗体不生效），缺少斜体字面时错切模拟。改动集中在 src/cosmic_text_system.rs，以“SCell 补丁”注释标出
+gpui-pre-wgpu = { path = "patches/gpui-pre-wgpu" }

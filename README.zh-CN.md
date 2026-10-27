@@ -60,4 +60,4 @@ cargo build --release
 
 ## 许可证
 
-[Apache-2.0](LICENSE)。Catppuccin 主题使用 [Catppuccin](https://catppuccin.com) 配色。
+[Apache-2.0](LICENSE)。Catppuccin 主题使用 [Catppuccin](https://catppuccin.com) 配色。内置字体 SCell Mono 由 [Maple Mono](https://github.com/subframe7536/maple-font) 修改而来，按 [SIL Open Font License 1.1](crates/scell-ui/assets/fonts/OFL.txt) 授权。

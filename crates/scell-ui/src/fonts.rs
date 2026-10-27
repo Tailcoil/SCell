@@ -1,6 +1,8 @@
-//! 字体：桌面环境的界面字体，以及供设置页选择的字体列表（首次用到时在后台探测，缓存到进程结束）。
+//! 字体：内置字体、桌面环境的界面字体，以及供设置页选择的字体列表（首次用到时在后台探测，缓存到进程结束）。
 
+use std::borrow::Cow;
 use std::sync::Arc;
+use std::thread::JoinHandle;
 
 use gpui_kit::component::ActiveTheme;
 use gpui_kit::{App, FontStyle, FontWeight, Global, TextSystem, font, px};
@@ -23,8 +25,40 @@ pub(crate) struct SystemFont {
 
 impl Global for SystemFont {}
 
-/// 探测并记录系统界面字体。只采用本机确实装了的字体，否则留给 GPUI 的默认回退。
-pub(crate) fn init(cx: &mut App) {
+/// 内置字体 SCell Mono：正体与斜体两个可变字体的 TTC，zstd 压缩。由 `cargo xtask fonts` 生成。
+const BUNDLED: &[u8] = include_bytes!("../assets/fonts/SCellMono.ttc.zst");
+
+/// 正在后台解压的内置字体。
+pub struct BundledFont(JoinHandle<std::io::Result<Vec<u8>>>);
+
+impl BundledFont {
+    /// 在后台线程解压内置字体（约 35 MB），与启动时的其他工作并行；[`crate::init`] 时取回并注册。
+    pub fn load() -> Self {
+        Self(std::thread::spawn(|| {
+            // 生成时写入了原始大小
+            let size = zstd::zstd_safe::get_frame_content_size(BUNDLED)
+                .ok()
+                .flatten()
+                .unwrap_or_default();
+            zstd::bulk::decompress(BUNDLED, usize::try_from(size).unwrap_or_default())
+        }))
+    }
+}
+
+/// 注册内置字体，再探测并记录系统界面字体。系统字体只采用本机确实装了的，否则留给 GPUI 的默认回退。
+pub(crate) fn init(cx: &mut App, bundled: BundledFont) {
+    let started = std::time::Instant::now();
+    match bundled.0.join() {
+        Ok(Ok(data)) => {
+            if let Err(err) = cx.text_system().add_fonts(vec![Cow::Owned(data)]) {
+                tracing::error!(%err, "无法注册内置字体");
+            }
+        }
+        Ok(Err(err)) => tracing::error!(%err, "无法解压内置字体"),
+        Err(_) => tracing::error!("解压内置字体的线程崩溃"),
+    }
+    tracing::debug!(waited = ?started.elapsed(), "内置字体已注册");
+
     let mut font = platform::system_font();
     if let Some(family) = &font.family {
         let installed = cx.text_system().all_font_names();

@@ -20,9 +20,18 @@ const TARGETS: &[&str] = &[
 /// 程序内嵌的清单，每行 `名称\t版本\t许可证`。
 pub(crate) const LIST: &str = "crates/scell-ui/assets/licenses.tsv";
 
+/// 内置字体 SCell Mono 的来源（见 xtask/fonts/build.py），不在 Cargo 依赖里，单独列出。
+const FONT: (&str, &str, &str) = ("Maple Mono", "7.9", "OFL-1.1");
+/// 字体的许可证全文，由 `cargo xtask fonts` 随字体一起取得。
+const FONT_LICENSE: &str = "crates/scell-ui/assets/fonts/OFL.txt";
+/// 许可证模板中字体一节的占位。
+const FONT_MARKER: &str = "<!-- bundled-fonts -->";
+
 /// 写入（或在 `check` 时只比对）依赖清单。
 pub(crate) fn licenses(root: &Path, check: bool) -> anyhow::Result<()> {
     let mut rows = BTreeSet::new();
+    let (name, version, license) = FONT;
+    rows.insert((name.to_owned(), version.to_owned(), license.to_owned()));
     for target in TARGETS {
         rows.extend(dependencies(root, target)?);
     }
@@ -116,7 +125,7 @@ fn dependencies(root: &Path, target: &str) -> anyhow::Result<Vec<(String, String
         .collect())
 }
 
-/// 用 cargo-about 生成含全部许可证全文的 HTML，供打包。
+/// 用 cargo-about 生成含全部许可证全文的 HTML，供打包；内置字体的许可证另外补进去。
 pub(crate) fn notices(root: &Path, out: &Path) -> anyhow::Result<PathBuf> {
     let file = out.join("THIRD-PARTY-LICENSES.html");
     let dir = root.join("packaging/licenses");
@@ -129,5 +138,27 @@ pub(crate) fn notices(root: &Path, out: &Path) -> anyhow::Result<PathBuf> {
         .arg(&file)
         .arg(dir.join("about.hbs")))
     .context("需要 cargo-about：cargo install --locked cargo-about --features cli")?;
+
+    let html = std::fs::read_to_string(&file)?;
+    if !html.contains(FONT_MARKER) {
+        bail!("about.hbs 缺少占位 {FONT_MARKER}");
+    }
+    let text = std::fs::read_to_string(root.join(FONT_LICENSE))
+        .with_context(|| format!("缺少 {FONT_LICENSE}，运行 cargo xtask fonts 生成"))?;
+    let (name, version, license) = FONT;
+    let section = format!(
+        "<h3 id=\"bundled-font\">{license}</h3>\n\
+         <p>Used by the bundled font SCell Mono, a modified version of {name} {version} \
+         (<a href=\"https://github.com/subframe7536/maple-font\">github.com/subframe7536/maple-font</a>).</p>\n\
+         <pre>{}</pre>",
+        escape_html(&text)
+    );
+    std::fs::write(&file, html.replace(FONT_MARKER, &section))?;
     Ok(file)
+}
+
+fn escape_html(text: &str) -> String {
+    text.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
 }
