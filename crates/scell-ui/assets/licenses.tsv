@@ -647,6 +647,7 @@ tinystr	0.8.4	Unicode-3.0
 tinyvec	1.13.3	Zlib OR Apache-2.0 OR MIT
 tokio	1.54.1	MIT
 tokio-macros	2.7.2	MIT
+tokio-util	0.7.20	MIT
 toml	0.8.23	MIT OR Apache-2.0
 toml	1.1.8+spec-1.1.0	MIT OR Apache-2.0
 toml_datetime	0.6.11	MIT OR Apache-2.0
@@ -812,8 +813,8 @@ zip	8.6.0	MIT
 zlib-rs	0.6.8	Zlib
 zmij	1.0.23	MIT
 zopfli	0.8.4	Apache-2.0
-zstd	0.13.3	MIT
-zstd-safe	7.3.0	BSD-3-Clause
+zstd	0.14.3	BSD-3-Clause
+zstd-safe	8.2.0	BSD-3-Clause
 zstd-sys	2.1.2+zstd.1.5.7	BSD-3-Clause
 zune-core	0.4.12	MIT OR Apache-2.0 OR Zlib
 zune-core	0.5.3	MIT OR Apache-2.0 OR Zlib
