@@ -130,13 +130,13 @@ crossbeam-deque	0.8.8	MIT OR Apache-2.0
 crossbeam-epoch	0.9.21	MIT OR Apache-2.0
 crossbeam-utils	0.8.23	MIT OR Apache-2.0
 crunchy	0.2.4	MIT
-crypto-bigint	0.7.5	Apache-2.0 OR MIT
+crypto-bigint	0.7.10	Apache-2.0 OR MIT
 crypto-common	0.1.7	MIT OR Apache-2.0
 crypto-common	0.2.2	MIT OR Apache-2.0
 crypto-primes	0.7.2	Apache-2.0 OR MIT
 ctor	1.0.13	Apache-2.0 OR MIT
 ctr	0.10.1	MIT OR Apache-2.0
-ctutils	0.4.5	Apache-2.0 OR MIT
+ctutils	0.4.6	Apache-2.0 OR MIT
 cursor-icon	1.2.0	MIT OR Apache-2.0 OR Zlib
 curve25519-dalek	5.0.0	BSD-3-Clause
 curve25519-dalek-derive	0.1.1	MIT/Apache-2.0
