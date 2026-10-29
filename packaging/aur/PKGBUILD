@@ -1,6 +1,6 @@
 # Maintainer: Tailcoil <110141765+Tailcoil@users.noreply.github.com>
 pkgname=scell-bin
-pkgver=0.2.0
+pkgver=0.3.0
 pkgrel=1
 pkgdesc='More than fast: a clean, intuitive, all-in-one modern terminal'
 arch=('x86_64')
