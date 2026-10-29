@@ -63,7 +63,7 @@ pub struct Metrics {
     /// 1、5、15 分钟平均负载；Windows 上没有。
     pub load: Option<[f32; 3]>,
     pub uptime: Duration,
-    /// 网络收发速率（字节每秒），不含回环接口。
+    /// 网络收发速率（字节每秒），统计口径见 [`net_sum`]。
     pub net_rx: Option<f64>,
     pub net_tx: Option<f64>,
     pub disks: Vec<DiskUsage>,
@@ -103,7 +103,7 @@ pub(crate) struct Raw {
     pub(crate) cpu: Option<(u64, u64)>,
     pub(crate) memory: Usage,
     pub(crate) swap: Usage,
-    /// 非回环接口的累计收发字节。
+    /// 累计收发字节，统计口径见 [`net_sum`]。
     pub(crate) net: Option<(u64, u64)>,
     pub(crate) disks: Vec<DiskUsage>,
     pub(crate) procs: Option<Procs>,
@@ -183,6 +183,18 @@ impl Rates {
         self.prev = Some((at, raw));
         m
     }
+}
+
+/// 非回环网卡（是否物理网卡，收，发）的合计；没有网卡时为 `None`。
+/// 透明代理（dae 等）、容器与虚拟机的流量会同时经过虚拟网卡和物理网卡，全部相加会重复计数，
+/// 因此有物理网卡时只计物理网卡；没有时（OpenVZ、LXC 容器）退回全部计入。
+fn net_sum(ifaces: &[(bool, u64, u64)]) -> Option<(u64, u64)> {
+    let physical_only = ifaces.iter().any(|i| i.0);
+    ifaces
+        .iter()
+        .filter(|i| i.0 || !physical_only)
+        .map(|&(_, rx, tx)| (rx, tx))
+        .reduce(|a, b| (a.0 + b.0, a.1 + b.1))
 }
 
 /// 两次 `/proc/stat` 采样（总计，空闲）之间的 CPU 占用比例。

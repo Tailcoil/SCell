@@ -7,7 +7,12 @@ while :; do
   head -n 1 /proc/stat
   echo @@mem
   grep -E '^(Mem|Swap)' /proc/meminfo
-  echo @@net
+  # 段头附上物理网卡名（有 device 链接的）
+  printf @@net
+  for d in /sys/class/net/*/device; do
+    [ -e "$d" ] && d=${d%/device} && printf ' %s' "${d##*/}"
+  done
+  echo
   tail -n +3 /proc/net/dev
   echo @@df
   df -kP 2>/dev/null

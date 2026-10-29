@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use super::{DiskUsage, Procs, Raw, Usage};
+use super::{DiskUsage, Procs, Raw, Usage, net_sum};
 
 /// 解析一帧；缺失或格式不对的项留空，不让整帧作废。
 pub(crate) fn frame(text: &str) -> Raw {
@@ -10,15 +10,17 @@ pub(crate) fn frame(text: &str) -> Raw {
     let mut section = "head";
     let mut head = 0;
     let mut mem = MemInfo::default();
-    let mut net = (0u64, 0u64);
-    let mut has_net = false;
+    let mut physical: Vec<&str> = Vec::new();
+    let mut net = Vec::new();
     // 同一设备挂在多处（btrfs 子卷、bind mount）只取第一个挂载点
     let mut devices: Vec<String> = Vec::new();
     for line in text.lines() {
         if let Some(header) = line.strip_prefix("@@") {
             let mut words = header.split_whitespace();
             section = words.next().unwrap_or_default();
-            if section == "proc" {
+            if section == "net" {
+                physical = words.collect();
+            } else if section == "proc" {
                 let mut num = || words.next().and_then(|v| v.parse::<u64>().ok());
                 raw.procs = Some(Procs {
                     clock_ticks: num().unwrap_or(100),
@@ -40,10 +42,8 @@ pub(crate) fn frame(text: &str) -> Raw {
             }
             "mem" => mem.line(line),
             "net" => {
-                if let Some((rx, tx)) = net_line(line) {
-                    net.0 += rx;
-                    net.1 += tx;
-                    has_net = true;
+                if let Some((name, rx, tx)) = net_line(line) {
+                    net.push((physical.contains(&name), rx, tx));
                 }
             }
             "proc" => {
@@ -70,7 +70,7 @@ pub(crate) fn frame(text: &str) -> Raw {
         total: mem.swap_total,
         used: mem.swap_total.saturating_sub(mem.swap_free),
     };
-    raw.net = has_net.then_some(net);
+    raw.net = net_sum(&net);
     raw
 }
 
@@ -130,16 +130,17 @@ impl MemInfo {
 }
 
 /// `/proc/net/dev` 的一行：接口名后依次是 8 个接收计数与 8 个发送计数。回环接口不计。
-fn net_line(line: &str) -> Option<(u64, u64)> {
+fn net_line(line: &str) -> Option<(&str, u64, u64)> {
     let (name, rest) = line.split_once(':')?;
-    if name.trim() == "lo" {
+    let name = name.trim();
+    if name == "lo" {
         return None;
     }
     let values: Vec<u64> = rest
         .split_whitespace()
         .filter_map(|v| v.parse().ok())
         .collect();
-    Some((*values.first()?, *values.get(8)?))
+    Some((name, *values.first()?, *values.get(8)?))
 }
 
 /// 探针里 awk 输出的一行：`pid 累计滴答 rss页数 名称`（名称可含空格）。
@@ -196,9 +197,11 @@ MemFree:          500000 kB
 MemAvailable:    1500000 kB
 SwapTotal:       1000000 kB
 SwapFree:         750000 kB
-@@net
+@@net eth0
     lo: 9999 10 0 0 0 0 0 0 9999 10 0 0 0 0 0 0
   eth0: 1000 10 0 0 0 0 0 0 2000 20 0 0 0 0 0 0
+docker0: 700 7 0 0 0 0 0 0 800 8 0 0 0 0 0 0
+vethab12: 800 8 0 0 0 0 0 0 700 7 0 0 0 0 0 0
 @@df
 Filesystem     1024-blocks    Used Available Capacity Mounted on
 udev               1000000       0   1000000       0% /dev
@@ -228,6 +231,16 @@ udev               1000000       0   1000000       0% /dev
         let procs = raw.procs.unwrap();
         assert_eq!((procs.clock_ticks, procs.page_size), (100, 4096));
         assert_eq!(procs.list[1], (42, 1000, 2000, "tmux: server".into()));
+    }
+
+    #[test]
+    fn counts_virtual_interfaces_without_physical_ones() {
+        let raw = frame(
+            "@@net\n    lo: 9 1 0 0 0 0 0 0 9 1 0 0 0 0 0 0\n\
+             venet0: 300 3 0 0 0 0 0 0 400 4 0 0 0 0 0 0\n\
+             tun0: 10 1 0 0 0 0 0 0 20 2 0 0 0 0 0 0\n",
+        );
+        assert_eq!(raw.net, Some((310, 420)));
     }
 
     #[test]

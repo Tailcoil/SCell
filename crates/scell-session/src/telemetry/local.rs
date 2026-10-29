@@ -40,12 +40,12 @@ pub(crate) async fn run(tx: flume::Sender<MetricsUpdate>, mut stop: oneshot::Rec
         let now = Instant::now();
         let secs = now.duration_since(last).as_secs_f64();
         last = now;
-        let (rx, tx_bytes) = networks
+        let ifaces: Vec<_> = networks
             .iter()
             .filter(|(name, _)| !is_loopback(name))
-            .fold((0u64, 0u64), |(r, t), (_, n)| {
-                (r + n.received(), t + n.transmitted())
-            });
+            .map(|(name, n)| (is_physical(name), n.received(), n.transmitted()))
+            .collect();
+        let (rx, tx_bytes) = super::net_sum(&ifaces).unwrap_or_default();
         let load = (!cfg!(windows)).then(|| {
             let l = System::load_average();
             [l.one as f32, l.five as f32, l.fifteen as f32]
@@ -138,4 +138,19 @@ fn global_cpu(sys: &System, _: &mut Option<(u64, u64)>, first: bool) -> Option<f
 
 fn is_loopback(name: &str) -> bool {
     name == "lo" || name.starts_with("Loopback")
+}
+
+/// 物理网卡（含虚拟机里的 virtio 等）有 `device` 链接；dae、Docker、网桥、tun 等虚拟网卡没有。
+#[cfg(target_os = "linux")]
+fn is_physical(name: &str) -> bool {
+    std::path::Path::new("/sys/class/net")
+        .join(name)
+        .join("device")
+        .exists()
+}
+
+/// 其他平台暂不区分，全部计入。
+#[cfg(not(target_os = "linux"))]
+fn is_physical(_: &str) -> bool {
+    false
 }
