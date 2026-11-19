@@ -138,8 +138,8 @@ fn install_panic_hook(dir: PathBuf) {
             env!("CARGO_PKG_VERSION"),
             thread.name().unwrap_or("<unnamed>"),
         );
-        let name = chrono::Local::now()
-            .format("crash-%Y%m%d-%H%M%S.txt")
+        let name = jiff::ZonedDateTime::now()
+            .strftime("crash-%Y%m%d-%H%M%S.txt")
             .to_string();
         let path = dir.join(name);
         if std::fs::create_dir_all(&dir)

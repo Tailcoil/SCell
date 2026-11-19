@@ -58,11 +58,11 @@ velopack = "1.2"
 
 # 通用
 anyhow = "1"
-chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 async-trait = "0.1"
 bytes = "1"
 clap = { version = "4", features = ["derive", "env"] }
 flume = "0.12"
+jiff = "1"
 parking_lot = "0.12"
 rust-i18n = "4"
 serde = { version = "1", features = ["derive"] }

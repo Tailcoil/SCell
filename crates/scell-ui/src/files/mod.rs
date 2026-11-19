@@ -39,18 +39,19 @@ pub(crate) fn format_size(bytes: u64) -> String {
 
 /// 修改时间（Unix 秒）：今年内省略年份。
 pub(crate) fn format_time(secs: u64) -> String {
-    use chrono::{Datelike, Local, TimeZone};
     let Some(time) = i64::try_from(secs)
         .ok()
-        .and_then(|s| Local.timestamp_opt(s, 0).single())
+        .and_then(|s| jiff::Timestamp::from_second(s).ok())
     else {
         return String::new();
     };
-    if time.year() == Local::now().year() {
-        time.format("%m-%d %H:%M").to_string()
+    let time = time.to_zoned_datetime(jiff::tz::TimeZone::system());
+    let format = if time.year() == jiff::ZonedDateTime::now().year() {
+        "%m-%d %H:%M"
     } else {
-        time.format("%Y-%m-%d").to_string()
-    }
+        "%Y-%m-%d"
+    };
+    time.strftime(format).to_string()
 }
 
 #[cfg(test)]
@@ -64,5 +65,12 @@ mod tests {
         assert_eq!(format_size(1536), "1.50 KB");
         assert_eq!(format_size(20 * 1024 * 1024), "20.0 MB");
         assert_eq!(format_size(300 * 1024 * 1024 * 1024), "300 GB");
+    }
+
+    #[test]
+    fn times() {
+        // 1971 年年中，任何时区下都不跨年
+        assert!(format_time(86_400 * 545).starts_with("1971-"));
+        assert_eq!(format_time(u64::MAX), "");
     }
 }
