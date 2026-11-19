@@ -33,7 +33,7 @@ encoding_rs = "0.8"
 sysinfo = { version = "0.31", default-features = false, features = ["system", "disk", "network"] }
 
 # 网络
-russh = { version = "0.64", default-features = false, features = ["ring", "rsa"] }
+russh = { version = "0.65", default-features = false, features = ["ring", "rsa"] }
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "net", "io-util", "macros"] }
 tokio-util = "0.7"
 
