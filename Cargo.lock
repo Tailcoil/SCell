@@ -6650,8 +6650,6 @@ version = "0.3.0"
 dependencies = [
  "alacritty_terminal",
  "parking_lot",
- "thiserror 2.0.21",
- "tracing",
 ]
 
 [[package]]
