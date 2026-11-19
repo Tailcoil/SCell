@@ -46,7 +46,7 @@ windows-native-keyring-store = "1"
 apple-native-keyring-store = { version = "1", features = ["keychain"] }
 zbus-secret-service-keyring-store = { version = "1", features = ["crypto-rust"] }
 shlex = "2"
-ssh2-config = "0.8"
+ssh2-config = "0.9"
 tempfile = "3"
 toml = "1"
 toml_edit = "0.25"
