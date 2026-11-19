@@ -2,7 +2,7 @@
 
 use gpui_kit::{
     Context, MouseButton as GpuiButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels,
-    Point, ScrollWheelEvent, Window,
+    Point, ScrollEvent, Window,
 };
 use scell_term::input::{
     Key, KeyInput, Modifiers, MouseAction, MouseButton, MouseInput, encode_key, encode_mouse,
@@ -89,7 +89,7 @@ impl TerminalView {
         let Some(at) = self.cell_at(e.position) else {
             return;
         };
-        if e.button == GpuiButton::Left && e.modifiers.secondary() {
+        if e.button == GpuiButton::Left && e.modifiers.secondary(cx) {
             self.update_link(Some(e.position), true, cx);
             if let Some(link) = &self.mouse.link {
                 cx.open_url(&link.uri);
@@ -141,7 +141,7 @@ impl TerminalView {
         if self.scrollbar_move(e.position, cx) {
             return;
         }
-        self.update_link(Some(e.position), e.modifiers.secondary(), cx);
+        self.update_link(Some(e.position), e.modifiers.secondary(cx), cx);
         let Some(at) = self.cell_at(e.position) else {
             return;
         };
@@ -178,7 +178,7 @@ impl TerminalView {
         }
     }
 
-    pub(crate) fn scroll(&mut self, e: &ScrollWheelEvent, _: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn scroll(&mut self, e: &ScrollEvent, _: &mut Window, cx: &mut Context<Self>) {
         let Some((metrics, _)) = self.metrics else {
             return;
         };

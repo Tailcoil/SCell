@@ -1703,6 +1703,7 @@ impl Render for Workspace {
         crate::blur::sync(
             window,
             Appearance::material(cx) == scell_config::settings::WindowMaterial::Blur,
+            cx,
         );
         self.context_shown = self.context_open && self.context_fits(window);
         self.sync_focused_pane(window, cx);

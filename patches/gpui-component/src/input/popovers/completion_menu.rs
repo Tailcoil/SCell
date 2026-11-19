@@ -464,8 +464,8 @@ impl Render for CompletionMenu {
                     )
                     .when_some(selected_documentation, |this, documentation| {
                         let mut doc = match documentation {
-                            lsp_types::Documentation::String(s) => s.clone(),
-                            lsp_types::Documentation::MarkupContent(mc) => mc.value.clone(),
+                            lsp_types::Documentation::String(s) => s,
+                            lsp_types::Documentation::MarkupContent(mc) => mc.value,
                         };
                         if vertical_layout {
                             doc = doc.split("\n").next().unwrap_or_default().to_string();
@@ -493,6 +493,7 @@ impl Render for CompletionMenu {
                     .into_any_element()
             },
         ))
+        .with_priority(gpui_base::POPUP_PRIORITY)
         .into_any_element()
     }
 }

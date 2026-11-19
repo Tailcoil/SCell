@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::mem::ManuallyDrop;
 
 use gpui_kit::component::{window_corner_radii, window_paddings};
-use gpui_kit::{Window, WindowId};
+use gpui_kit::{App, Window, WindowId};
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle, RawDisplayHandle, RawWindowHandle};
 use wayland_client::backend::{Backend, ObjectId};
 use wayland_client::globals::{GlobalList, GlobalListContents, registry_queue_init};
@@ -62,11 +62,11 @@ thread_local! {
     static CLIENT: RefCell<Option<ManuallyDrop<Option<Client>>>> = const { RefCell::new(None) };
 }
 
-pub(super) fn sync(window: &Window, blur: bool) {
+pub(super) fn sync(window: &Window, blur: bool, cx: &App) {
     CLIENT.with_borrow_mut(|client| {
         let client = client.get_or_insert_with(|| ManuallyDrop::new(connect(window)));
         if let Some(client) = client.as_mut() {
-            client.sync(window, blur);
+            client.sync(window, blur, cx);
         }
     });
 }
@@ -138,10 +138,10 @@ fn bind_manager(
 }
 
 impl Client {
-    fn sync(&mut self, window: &Window, blur: bool) {
+    fn sync(&mut self, window: &Window, blur: bool, cx: &App) {
         let _ = self.queue.dispatch_pending(&mut self.state);
         let wanted = if blur && self.state.blur {
-            frame_region(window, self.frame_relative)
+            frame_region(window, self.frame_relative, cx)
         } else {
             Vec::new()
         };
@@ -232,10 +232,10 @@ fn surface(conn: &Connection, window: &Window) -> Option<wl_surface::WlSurface> 
 }
 
 /// 可见窗口框（不含四周画阴影的透明边距）按圆角拼成的矩形；`frame_relative` 见 [`Client::frame_relative`]。
-fn frame_region(window: &Window, frame_relative: bool) -> Vec<[i32; 4]> {
+fn frame_region(window: &Window, frame_relative: bool, cx: &App) -> Vec<[i32; 4]> {
     let size = window.viewport_size();
     let pad = window_paddings(window);
-    let radii = window_corner_radii(window);
+    let radii = window_corner_radii(window, cx);
     let (x, y) = if frame_relative {
         (0., 0.)
     } else {

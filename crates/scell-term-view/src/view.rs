@@ -273,7 +273,7 @@ impl TerminalView {
         true
     }
 
-    fn send_bound_key(&mut self, key: &str, cx: &mut Context<Self>) {
+    fn send_bound_key(&mut self, key: &'static str, cx: &mut Context<Self>) {
         if self.exited {
             return;
         }
@@ -342,9 +342,9 @@ impl Render for TerminalView {
             .track_focus(&self.focus)
             .on_key_down(cx.listener(Self::on_key_down))
             .on_key_up(cx.listener(Self::on_key_up))
-            .on_scroll_wheel(cx.listener(Self::scroll))
+            .on_scroll(cx.listener(Self::scroll))
             .on_modifiers_changed(cx.listener(|view, e: &ModifiersChangedEvent, _, cx| {
-                view.update_link(None, e.modifiers.secondary(), cx)
+                view.update_link(None, e.modifiers.secondary(cx), cx)
             }))
             .on_action(cx.listener(Self::copy))
             .on_action(cx.listener(Self::paste_clipboard))
