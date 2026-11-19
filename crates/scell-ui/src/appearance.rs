@@ -193,6 +193,8 @@ pub(crate) fn apply(cx: &mut App) {
         theme.title_bar_border = transparent_black();
         // 侧弹窗默认让出一条标题栏的高度；这里没有横贯窗口的标题栏，改由弹窗自己留边距
         theme.sheet.margin_top = px(0.);
+        // 客户端装饰时窗口四角的圆角，组件库默认直角
+        theme.window_radius = px(18.);
     });
 
     let font_size = (settings.terminal.font_size + cx.global::<Appearance>().zoom)

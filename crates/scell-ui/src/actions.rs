@@ -2,8 +2,8 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use gpui_kit::{
-    Action, App, DummyKeyboardMapper, Global, InvalidKeystrokeError, KeyBinding,
-    KeyBindingContextPredicate, KeyBindingMetaIndex, Keystroke, Unbind, actions,
+    Action, App, Global, InvalidKeystrokeError, KeyBinding, KeyBindingContextPredicate,
+    KeyBindingMetaIndex, Keystroke, OperatingSystem, Unbind, actions,
 };
 use rust_i18n::t;
 use scell_config::settings::KeyList;
@@ -138,17 +138,22 @@ fn binding(
     keys: &str,
     action: Box<dyn Action>,
     context: &str,
+    cx: &App,
 ) -> Result<KeyBinding, InvalidKeystrokeError> {
     let predicate = KeyBindingContextPredicate::parse(context).ok().map(Rc::new);
-    KeyBinding::load(keys, action, predicate, false, None, &DummyKeyboardMapper)
+    KeyBinding::load(keys, action, predicate, false, None, cx)
 }
 
 pub(crate) fn bind_default_keys(cx: &mut App) {
-    cx.bind_keys(COMMANDS.iter().flat_map(|c| {
-        c.keys
-            .iter()
-            .filter_map(|key| binding(key, (c.action)(), c.context).ok())
-    }));
+    let bindings: Vec<_> = COMMANDS
+        .iter()
+        .flat_map(|c| {
+            c.keys
+                .iter()
+                .filter_map(|key| binding(key, (c.action)(), c.context, cx).ok())
+        })
+        .collect();
+    cx.bind_keys(bindings);
     // 只在进程已退出的终端里生效
     cx.bind_keys([KeyBinding::new(
         "enter",
@@ -180,9 +185,9 @@ const NAMED_KEYS: &[&str] = &[
 ];
 
 /// GPUI 接受任意键名，写错的键名（如 `ctrl-shift-pgup`）会静默失效，这里先校验。
-fn valid_keys(keys: &str) -> bool {
+fn valid_keys(keys: &str, os: OperatingSystem) -> bool {
     keys.split_whitespace().all(|part| {
-        Keystroke::parse(part).is_ok_and(|k| {
+        Keystroke::parse_with_os(part, os).is_ok_and(|k| {
             k.key.chars().count() == 1
                 || NAMED_KEYS.contains(&k.key.as_str())
                 || k.key
@@ -219,13 +224,15 @@ pub(crate) fn apply_user_keys(keys: &BTreeMap<String, KeyList>, cx: &mut App) ->
         // 先撤掉默认按键，同一按键上的其他命令不受影响
         let unbind = Unbind((command.action)().name().into());
         for key in command.keys {
-            if let Ok(b) = binding(key, unbind.boxed_clone(), command.context) {
+            if let Ok(b) = binding(key, unbind.boxed_clone(), command.context, cx) {
                 bindings.push(b.with_meta(USER_KEYS));
             }
         }
         for key in list.iter() {
-            match binding(key, (command.action)(), command.context) {
-                Ok(b) if valid_keys(key) => bindings.push(b.with_meta(USER_KEYS)),
+            match binding(key, (command.action)(), command.context, cx) {
+                Ok(b) if valid_keys(key, cx.platform_info().os) => {
+                    bindings.push(b.with_meta(USER_KEYS))
+                }
                 _ => errors.push(t!("keys.invalid", name = name, key = key).into_owned()),
             }
         }
@@ -252,9 +259,10 @@ mod tests {
     fn default_keys_parse() {
         for c in COMMANDS {
             for key in c.keys {
+                assert!(valid_keys(key, OperatingSystem::Linux), "{} {key}", c.name);
                 assert!(
-                    binding(key, (c.action)(), c.context).is_ok(),
-                    "{} {key}",
+                    KeyBindingContextPredicate::parse(c.context).is_ok(),
+                    "{}",
                     c.name
                 );
             }
@@ -271,7 +279,7 @@ mod tests {
             "f12",
             "ctrl-k ctrl-s",
         ] {
-            assert!(valid_keys(ok), "{ok}");
+            assert!(valid_keys(ok, OperatingSystem::Linux), "{ok}");
         }
         for bad in [
             "not a key",
@@ -280,7 +288,7 @@ mod tests {
             "ctrl-shft-x",
             "f36",
         ] {
-            assert!(!valid_keys(bad), "{bad}");
+            assert!(!valid_keys(bad, OperatingSystem::Linux), "{bad}");
         }
     }
 

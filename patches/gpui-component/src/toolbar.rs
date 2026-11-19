@@ -4,7 +4,7 @@ use gpui::{
 };
 use smallvec::SmallVec;
 
-use gpui_base::{Toolbar as BaseToolbar, ToolbarGroup as BaseToolbarGroup};
+use gpui_base::{LogicalStyledExt as _, Toolbar as BaseToolbar, ToolbarGroup as BaseToolbarGroup};
 
 use crate::{Sizable, Size, StyleSized as _, StyledExt as _};
 
@@ -240,19 +240,19 @@ impl Sizable for Toolbar {
 }
 
 impl RenderOnce for Toolbar {
-    fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
+    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let size = self.size;
         let items = self.items.into_iter().map(|item| item.into_element(size));
 
         BaseToolbar::new(self.id)
             .disabled(self.disabled)
-            .flex()
+            .flex_row_dir(cx)
             .items_center()
             .flex_shrink_0()
             .map(|this| match size {
-                Size::XSmall => this.h_7().p_1().gap_1().text_xs(),
-                Size::Small => this.h_8().p_1().gap_1().text_sm(),
-                _ => this.h_12().p_2().gap_2().text_sm(),
+                Size::XSmall => this.min_h_7().p_1().gap_1().text_xs(),
+                Size::Small => this.min_h_8().p_1().gap_1().text_sm(),
+                _ => this.min_h_12().p_2().gap_2().text_sm(),
             })
             .refine_style(&self.style)
             .children(items)

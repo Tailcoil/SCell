@@ -11,13 +11,20 @@ use tokio::sync::oneshot;
 use super::{DiskUsage, INTERVAL, Metrics, MetricsUpdate, ProcessUsage, TOP_PROCESSES, Usage};
 
 pub(crate) async fn run(tx: flume::Sender<MetricsUpdate>, mut stop: oneshot::Receiver<()>) {
-    let mut sys = System::new_with_specifics(
-        RefreshKind::new()
-            .with_cpu(CpuRefreshKind::new().with_cpu_usage())
+    let mut sys = match System::new_with_specifics(
+        RefreshKind::nothing()
+            .with_cpu(CpuRefreshKind::nothing().with_usage())
             .with_memory(MemoryRefreshKind::everything()),
-    );
-    let mut networks = Networks::new_with_refreshed_list();
-    let mut disks = Disks::new_with_refreshed_list();
+    ) {
+        Ok(sys) => sys,
+        Err(e) => {
+            let _ = tx.send(MetricsUpdate::Failed(e.to_string()));
+            return;
+        }
+    };
+    // 网卡与磁盘只是指标的一部分，取不到时对应项留空
+    let mut networks = Networks::new_with_refreshed_list().ok();
+    let mut disks = Disks::new_with_refreshed_list().ok();
     let mut last = Instant::now();
     let mut first = true;
     let mut cpu_times = None;
@@ -29,30 +36,37 @@ pub(crate) async fn run(tx: flume::Sender<MetricsUpdate>, mut stop: oneshot::Rec
             sys.refresh_memory();
             sys.refresh_processes_specifics(
                 ProcessesToUpdate::All,
-                ProcessRefreshKind::new()
+                true,
+                ProcessRefreshKind::nothing()
                     .with_cpu()
                     .with_memory()
                     .with_cmd(sysinfo::UpdateKind::OnlyIfNotSet),
             );
-            networks.refresh();
-            disks.refresh();
+            if let Some(networks) = &mut networks {
+                networks.refresh(true);
+            }
+            if let Some(disks) = &mut disks {
+                disks.refresh(true);
+            }
         });
         let now = Instant::now();
         let secs = now.duration_since(last).as_secs_f64();
         last = now;
         let ifaces: Vec<_> = networks
             .iter()
+            .flat_map(|n| n.iter())
+            .filter_map(|(name, n)| Some((name.to_str()?, n)))
             .filter(|(name, _)| !is_loopback(name))
             .map(|(name, n)| (is_physical(name), n.received(), n.transmitted()))
             .collect();
         let (rx, tx_bytes) = super::net_sum(&ifaces).unwrap_or_default();
-        let load = (!cfg!(windows)).then(|| {
-            let l = System::load_average();
-            [l.one as f32, l.five as f32, l.fifteen as f32]
-        });
+        let load = System::load_average()
+            .ok()
+            .map(|l| [l.one as f32, l.five as f32, l.fifteen as f32]);
         let mut seen = Vec::new();
         let disk_list = disks
             .iter()
+            .flat_map(|d| d.iter())
             .filter(|d| d.total_space() > 0 && !d.is_removable())
             .filter(|d| {
                 // 同一设备挂在多处（bind mount、btrfs 子卷）只计一次
@@ -103,7 +117,7 @@ pub(crate) async fn run(tx: flume::Sender<MetricsUpdate>, mut stop: oneshot::Rec
                 total: sys.total_swap(),
             },
             load,
-            uptime: Duration::from_secs(System::uptime()),
+            uptime: Duration::from_secs(System::uptime().unwrap_or_default()),
             net_rx: (!first && secs > 0.).then(|| rx as f64 / secs),
             net_tx: (!first && secs > 0.).then(|| tx_bytes as f64 / secs),
             disks: disk_list,
@@ -120,7 +134,7 @@ pub(crate) async fn run(tx: flume::Sender<MetricsUpdate>, mut stop: oneshot::Rec
     }
 }
 
-/// sysinfo 0.31 在 Linux 上把 guest（虚拟机）时间算进总时间却不算进工作时间，
+/// sysinfo 在 Linux 上把 guest（虚拟机）时间算进总时间却不算进工作时间，
 /// 宿主跑虚拟机时占用会明显偏低，因此 Linux 上与远程端一样直接读 `/proc/stat`。
 #[cfg(target_os = "linux")]
 fn global_cpu(_: &System, prev: &mut Option<(u64, u64)>, _first: bool) -> Option<f32> {

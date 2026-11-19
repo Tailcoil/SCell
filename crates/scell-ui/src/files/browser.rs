@@ -420,7 +420,7 @@ impl FileBrowser {
             self.selected = (a..=b)
                 .filter_map(|i| self.row(i).map(|r| r.entry.path.clone()))
                 .collect();
-        } else if modifiers.secondary() {
+        } else if modifiers.secondary(cx) {
             if !self.selected.remove(&path) {
                 self.selected.insert(path);
             }

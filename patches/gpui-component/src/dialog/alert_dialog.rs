@@ -2,6 +2,7 @@ use gpui::{
     AnyElement, App, ClickEvent, IntoElement, ParentElement, Pixels, RenderOnce, SharedString,
     StyleRefinement, Styled, Window, prelude::FluentBuilder as _,
 };
+use gpui_base::LogicalStyledExt as _;
 
 use crate::{
     StyledExt as _, WindowExt as _,
@@ -271,6 +272,13 @@ impl AlertDialog {
         self
     }
 
+    /// Centers the alert dialog vertically in the window, whatever its
+    /// height, in place of the [`Self::margin_top`] offset.
+    pub fn centered(mut self) -> Self {
+        self.base = self.base.centered();
+        self
+    }
+
     /// Sets how the alert dialog enters, defaulting to [`DialogEntrance::SlideDown`].
     ///
     /// Shares the surface, backdrop, and reduced-motion policy of [`Dialog::entrance`].
@@ -324,6 +332,7 @@ impl AlertDialog {
                 this.header(
                     DialogHeader::new().child(
                         h_flex()
+                            .flex_row_dir(cx)
                             .gap_2()
                             .items_start()
                             .when_some(self.icon, |row, icon| row.child(icon))
@@ -532,6 +541,33 @@ mod tests {
         assert!(
             (bounds.origin.y - px(100.)).abs() <= px(0.5),
             "expected the surface within 0.5px of y=100, got {bounds:?}"
+        );
+    }
+
+    /// `centered` seats the surface in the vertical middle of the window,
+    /// whatever its height.
+    #[gpui::test]
+    fn centered_seats_the_alert_surface_in_the_middle(cx: &mut TestAppContext) {
+        let cx = window(cx, size(px(800.), px(600.)));
+        cx.update(|window, cx| {
+            window.open_alert_dialog(cx, |alert, _, _| {
+                alert
+                    .title("Unsaved changes")
+                    .description("Discard the draft?")
+                    .confirm()
+                    .centered()
+            })
+        });
+        cx.run_until_parked();
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+
+        let bounds = cx
+            .debug_bounds("dialog-0")
+            .expect("the alert dialog surface was not painted");
+        assert!(
+            (bounds.center().y - px(300.)).abs() <= px(0.5),
+            "expected the surface centered on y=300, got {bounds:?}"
         );
     }
 }

@@ -43,6 +43,7 @@ mod tests {
         }
     }
 
+    #[cfg(not(feature = "gpui-fast"))]
     impl IntoElement for PlainSelectableText {
         type Element = Self;
 
@@ -89,7 +90,8 @@ mod tests {
             self.selection.register(
                 TextSelectionRegistration::new(hitbox.clone(), bounds)
                     .with_document_order(self.document_order)
-                    .with_text_bounds(vec![bounds]),
+                    .with_text_bounds(vec![bounds])
+                    .with_rendered_element(&self.selection, window, cx),
                 window,
                 cx,
             );
@@ -1071,7 +1073,7 @@ mod tests {
 
     #[gpui::test]
     fn selection_spans_blocks_scrolled_past(cx: &mut TestAppContext) {
-        use gpui::{ScrollDelta, ScrollWheelEvent};
+        use gpui::{ScrollDelta, ScrollEvent};
 
         const BLOCKS: usize = 20;
 
@@ -1103,7 +1105,7 @@ mod tests {
             let _ = window.draw(cx);
         });
         for _ in 0..BLOCKS {
-            cx.simulate_event(ScrollWheelEvent {
+            cx.simulate_event(ScrollEvent {
                 position: point(px(10.), px(30.)),
                 delta: ScrollDelta::Pixels(point(px(0.), px(-40.))),
                 ..Default::default()
@@ -1146,7 +1148,7 @@ mod tests {
     /// selection of its own, and must still be copied — with its markup.
     #[gpui::test]
     fn source_selection_spans_blocks_scrolled_past(cx: &mut TestAppContext) {
-        use gpui::{ScrollDelta, ScrollWheelEvent};
+        use gpui::{ScrollDelta, ScrollEvent};
 
         const BLOCKS: usize = 20;
 
@@ -1177,7 +1179,7 @@ mod tests {
         });
         // Jump the whole document in one go, so the blocks in between never
         // paint at all and cannot leave a stale selection behind.
-        cx.simulate_event(ScrollWheelEvent {
+        cx.simulate_event(ScrollEvent {
             position: point(px(10.), px(30.)),
             delta: ScrollDelta::Pixels(point(px(0.), px(-40.) * BLOCKS as f32)),
             ..Default::default()
@@ -1463,6 +1465,7 @@ mod tests {
         samples: Rc<RefCell<Vec<bool>>>,
     }
 
+    #[cfg(not(feature = "gpui-fast"))]
     impl IntoElement for SelectionPaintProbe {
         type Element = Self;
 
@@ -2098,7 +2101,6 @@ mod tests {
         let b_notified = Rc::new(Cell::new(false));
         let _subscription = cx.update({
             let b_notified = b_notified.clone();
-            let second = second.clone();
             move |_, cx| cx.observe(&second, move |_, _| b_notified.set(true))
         });
         b_notified.set(false);

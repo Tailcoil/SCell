@@ -1,9 +1,9 @@
 // From:
 // https://github.com/zed-industries/zed/blob/56daba28d40301ee4c05546fadb691d070b7b2b6/crates/gpui/examples/window_shadow.rs
 use gpui::{
-    AnyElement, App, Corners, CursorStyle, Decorations, Edges, Hsla, InteractiveElement as _, IntoElement,
-    MouseButton, ParentElement, Pixels, Point, RenderOnce, ResizeEdge, Size, Styled as _, Tiling,
-    Window, div, point, prelude::FluentBuilder as _, px,
+    AnyElement, App, Corners, CursorStyle, Decorations, Edges, Hsla, InteractiveElement as _,
+    IntoElement, MouseButton, ParentElement, Pixels, Point, RenderOnce, ResizeEdge, Size,
+    Styled as _, Tiling, Window, div, point, prelude::FluentBuilder as _, px,
 };
 
 use crate::ActiveTheme;
@@ -15,36 +15,30 @@ pub(crate) const SHADOW_SIZE: Pixels = px(20.0);
 const BORDER_SIZE: Pixels = px(1.0);
 /// Half-width of the resize hit band on each side of the visible frame (inner border).
 const RESIZE_HIT_SIZE: Pixels = px(4.0);
-///
-/// SCell 补丁：原版为 0。GPUI 只按矩形裁剪子元素，贴着窗口四角的背景层（Root 的底色、
-/// 对话框与侧弹窗的遮罩）都要自行按 [`window_content_corner_radii`] 画圆角。
-pub(crate) const BORDER_RADIUS: Pixels = px(18.0);
 
-/// SCell 补丁：可见窗口框的四角半径。贴着屏幕边或其他窗口平铺的那一侧，相邻的角为直角；服务端装饰时全为直角。
-pub fn window_corner_radii(window: &Window) -> Corners<Pixels> {
-    match window.window_decorations() {
-        Decorations::Server => Corners::all(px(0.0)),
-        Decorations::Client { tiling } => {
-            let round = |a: bool, b: bool| if a || b { px(0.0) } else { BORDER_RADIUS };
-            Corners {
-                top_left: round(tiling.top, tiling.left),
-                top_right: round(tiling.top, tiling.right),
-                bottom_left: round(tiling.bottom, tiling.left),
-                bottom_right: round(tiling.bottom, tiling.right),
-            }
-        }
-    }
+/// The window's current corner radii: the theme's `window.radius`
+/// ([`crate::Theme::window_radius`]) for every corner of a client-decorated
+/// window that isn't next to a tiled edge, zero otherwise.
+///
+/// GPUI clips overflowing children to a rectangular content mask, so a non-zero
+/// radius only rounds the frame itself. Elements with a background that touch a
+/// window corner (the root surface, [`crate::TitleBar`], an application's bottom
+/// bar) must round that corner too, for example
+/// `div().rounded_bl(radii.bottom_left)`. The default stays square.
+pub fn window_corner_radii(window: &Window, cx: &App) -> Corners<Pixels> {
+    corner_radii(cx.theme().window_radius, window.window_decorations())
 }
 
-/// SCell 补丁：窗口框边线以内的内容层四角半径。
-pub(crate) fn window_content_corner_radii(window: &Window) -> Corners<Pixels> {
-    let outer = window_corner_radii(window);
-    let inner = |r: Pixels| if r > px(0.0) { r - BORDER_SIZE } else { r };
+fn corner_radii(radius: Pixels, decorations: Decorations) -> Corners<Pixels> {
+    let Decorations::Client { tiling } = decorations else {
+        return Corners::default();
+    };
+    let corner = |rounded: bool| if rounded { radius } else { px(0.0) };
     Corners {
-        top_left: inner(outer.top_left),
-        top_right: inner(outer.top_right),
-        bottom_left: inner(outer.bottom_left),
-        bottom_right: inner(outer.bottom_right),
+        top_left: corner(!tiling.top && !tiling.left),
+        top_right: corner(!tiling.top && !tiling.right),
+        bottom_left: corner(!tiling.bottom && !tiling.left),
+        bottom_right: corner(!tiling.bottom && !tiling.right),
     }
 }
 
@@ -148,6 +142,20 @@ pub(crate) fn window_content_insets(window: &Window) -> Edges<Pixels> {
     }
 }
 
+/// Per-side inset from the window bounds to the part of the window that is
+/// fully visible: not under the system bars, a display cutout or the on-screen
+/// keyboard ([`Window::fully_visible_bounds`]). Zero on desktop.
+pub(crate) fn window_safe_insets(window: &Window) -> Edges<Pixels> {
+    let viewport = window.viewport_size();
+    let visible = window.fully_visible_bounds();
+    Edges {
+        top: visible.top(),
+        right: viewport.width - visible.right(),
+        bottom: viewport.height - visible.bottom(),
+        left: visible.left(),
+    }
+}
+
 impl ParentElement for WindowBorder {
     fn extend(&mut self, elements: impl IntoIterator<Item = AnyElement>) {
         self.children.extend(elements);
@@ -157,12 +165,17 @@ impl ParentElement for WindowBorder {
 impl RenderOnce for WindowBorder {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let decorations = window.window_decorations();
-        let mut children = self.children;
+        let children = self.children;
         if !uses_client_border(decorations) {
-            return match children.len() {
-                1 => children.pop().unwrap(),
-                _ => div().size_full().children(children).into_any_element(),
-            };
+            // Keep the same `window-backdrop` id as the client-decorated frame below. The
+            // decorations can change at runtime (an app switching to server-side decorations,
+            // or a compositor granting a different mode), and without the shared id every
+            // element id path in the window would change, dropping all keyed element state.
+            return div()
+                .id("window-backdrop")
+                .size_full()
+                .children(children)
+                .into_any_element();
         }
         let Decorations::Client { tiling } = decorations else {
             unreachable!("client border requires client decorations");
@@ -180,36 +193,28 @@ impl RenderOnce for WindowBorder {
         };
         let resize_hit_size = self.resize_hit_size;
         window.set_client_inset(platform_inset);
+        let radii = window_corner_radii(window, cx);
+        // Lets the compositor treat the rounded corners as transparent.
+        window.set_client_corner_radii(radii);
         let window_size = window.window_bounds().get_bounds().size;
         let is_window_active = window.is_window_active();
-        let border_color = if cx.theme().is_dark() {
-            Hsla {
-                h: 0.,
-                s: 0.,
-                l: 0.2,
-                a: 1.0,
-            }
-        } else {
-            Hsla {
-                h: 0.,
-                s: 0.,
-                l: 0.8,
-                a: 1.0,
-            }
-        };
+        let border_color = cx.theme().window_border;
 
-        let radii = window_corner_radii(window);
         div()
             .id("window-backdrop")
             .bg(gpui::transparent_black())
             .flex()
             .flex_col()
             .overflow_hidden()
+            .rounded_tl(radii.top_left)
+            .rounded_tr(radii.top_right)
+            .rounded_bl(radii.bottom_left)
+            .rounded_br(radii.bottom_right)
             .when(!tiling.top, |div| div.pt(visual_shadow))
             .when(!tiling.bottom, |div| div.pb(visual_shadow))
             .when(!tiling.left, |div| div.pl(visual_shadow))
             .when(!tiling.right, |div| div.pr(visual_shadow))
-            .on_mouse_down(MouseButton::Left, move |_, window, _| {
+            .on_mouse_down(MouseButton::Left, move |_, window, cx| {
                 let Decorations::Client { tiling } = window.window_decorations() else {
                     return;
                 };
@@ -224,7 +229,12 @@ impl RenderOnce for WindowBorder {
                 let insets = client_frame_insets(platform_inset, &tiling);
 
                 match resize_edge(pos, size, insets, &tiling, resize_hit_size) {
-                    Some(edge) => window.start_window_resize(edge),
+                    Some(edge) => {
+                        gpui_base::TextSelection::end(window, cx);
+                        cx.stop_active_drag(window);
+                        cx.stop_propagation();
+                        window.start_window_resize(edge);
+                    }
                     None => {}
                 };
             })
@@ -236,7 +246,6 @@ impl RenderOnce for WindowBorder {
                     .min_h_0()
                     .min_w_0()
                     .overflow_hidden()
-                    // SCell 补丁：原版只圆上方两角；边线与阴影都随四角圆角绘制
                     .rounded_tl(radii.top_left)
                     .rounded_tr(radii.top_right)
                     .rounded_bl(radii.bottom_left)
@@ -315,6 +324,40 @@ fn cursor_style_for_resize_edge(edge: ResizeEdge) -> CursorStyle {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn corners_round_only_next_to_untiled_edges() {
+        use super::corner_radii;
+        use gpui::{Corners, Decorations, Tiling, px};
+
+        let radius = px(10.0);
+        assert_eq!(
+            corner_radii(
+                radius,
+                Decorations::Client {
+                    tiling: Tiling::default()
+                }
+            ),
+            Corners::all(radius)
+        );
+        let top_tiled = Tiling {
+            top: true,
+            ..Tiling::default()
+        };
+        assert_eq!(
+            corner_radii(radius, Decorations::Client { tiling: top_tiled }),
+            Corners {
+                top_left: px(0.0),
+                top_right: px(0.0),
+                bottom_left: radius,
+                bottom_right: radius,
+            }
+        );
+        assert_eq!(
+            corner_radii(radius, Decorations::Server),
+            Corners::default()
+        );
+    }
+
     use super::*;
 
     #[test]
