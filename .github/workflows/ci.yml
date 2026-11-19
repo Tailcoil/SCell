@@ -34,7 +34,8 @@ jobs:
       - name: 安装 Linux 构建依赖
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update
+          # 镜像同步期间索引可能暂时不一致，稍等重试
+          for i in 1 2 3; do sudo apt-get update && break; sleep 30; done
           sudo apt-get install -y libfontconfig-dev libfreetype-dev libxkbcommon-dev \
             libxkbcommon-x11-dev libxcb1-dev openssh-server
       # 版本取自 rust-toolchain.toml

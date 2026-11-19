@@ -23,7 +23,8 @@ jobs:
     steps:
       - name: 安装构建依赖
         run: |
-          apt-get update
+          # 镜像同步期间索引可能暂时不一致，稍等重试
+          for i in 1 2 3; do apt-get update && break; sleep 30; done
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             build-essential ca-certificates curl file git pkg-config rpm \
             libfontconfig-dev libfreetype-dev libxkbcommon-dev libxkbcommon-x11-dev libxcb1-dev
