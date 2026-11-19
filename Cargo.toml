@@ -30,7 +30,7 @@ gpui-kit = "=0.8.0"
 alacritty_terminal = "0.26"
 portable-pty = "0.9"
 encoding_rs = "0.8"
-sysinfo = { version = "0.31", default-features = false, features = ["system", "disk", "network"] }
+sysinfo = { version = "0.40", default-features = false, features = ["system", "disk", "network"] }
 
 # 网络
 russh = { version = "0.65", default-features = false, features = ["ring", "rsa"] }

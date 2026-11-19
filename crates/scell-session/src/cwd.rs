@@ -30,6 +30,7 @@ fn is_local_host(host: &str) -> bool {
 
 fn hostname() -> Option<String> {
     sysinfo::System::host_name()
+        .ok()
         .map(|n| n.trim().to_owned())
         .filter(|n| !n.is_empty())
 }
