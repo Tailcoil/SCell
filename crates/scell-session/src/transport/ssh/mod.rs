@@ -260,6 +260,7 @@ pub(crate) fn spawn_ssh(
         ui,
         encoding,
         link,
+        kept_forwards: Vec::new(),
     };
     let task = rt.spawn(session.run());
     *control.task.lock() = Some(task.abort_handle());
@@ -282,6 +283,8 @@ struct SshSession {
     ui: Arc<Interaction>,
     encoding: Encoding,
     link: CurrentLink,
+    /// 上一条连接上运行时添加的转发，新建连接后重新启动；复用已有连接时那边已在运行，直接丢弃。
+    kept_forwards: Vec<ForwardRule>,
 }
 
 /// 一次连接的结局。
@@ -395,8 +398,9 @@ impl SshSession {
             Err(e) => return self.fail(e),
         };
         // 转发属于连接：复用已有连接时它们已在运行
+        let kept = std::mem::take(&mut self.kept_forwards);
         if !reused {
-            self.start_forwards(&link).await;
+            self.start_forwards(&link, kept).await;
         }
         if self.mode == SshMode::Files {
             return self.hold(link).await;
@@ -480,7 +484,7 @@ impl SshSession {
             }
         }
         // 连接（及其跳板）要活到 shell 结束；其他会话或 SFTP 仍在用时不会真正断开
-        self.link.lock().take();
+        self.release_link(&link);
         let reason = lost_reason(&link);
         drop(link);
         match code {
@@ -508,7 +512,7 @@ impl SshSession {
         tracing::info!(session = %id, host = %self.target.host.name, "文件会话已建立");
         let established = std::time::Instant::now();
         link.conn.closed().await;
-        self.link.lock().take();
+        self.release_link(&link);
         Ended::Lost {
             transient: true,
             connected: true,
@@ -517,11 +521,19 @@ impl SshSession {
         }
     }
 
-    /// 启动主机配置的端口转发，句柄存在连接上，连接断开即停止。失败的写进终端，不影响会话。
-    async fn start_forwards(&self, link: &Link) {
-        for rule in &self.target.host.forwards {
+    /// 释放当前连接，先记下其上运行时添加的转发。
+    fn release_link(&mut self, link: &Link) {
+        self.kept_forwards = crate::forwards::runtime_rules(link);
+        self.link.lock().take();
+    }
+
+    /// 启动主机配置的端口转发与上一条连接带过来的临时转发，句柄存在连接上，连接断开即停止。
+    /// 失败的写进终端，不影响会话。
+    async fn start_forwards(&self, link: &Link, kept: Vec<ForwardRule>) {
+        let host_rules = self.target.host.forwards.iter().map(|r| (r.clone(), true));
+        for (rule, from_host) in host_rules.chain(kept.into_iter().map(|r| (r, false))) {
             let listen = rule.listen.clone();
-            if let Err(e) = crate::forwards::start(link, rule.clone(), true).await {
+            if let Err(e) = crate::forwards::start(link, rule, from_host).await {
                 notice(
                     &self.shared,
                     &format!(

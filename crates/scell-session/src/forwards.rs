@@ -1,5 +1,6 @@
 //! 连接上的端口转发：主机配置的规则随连接自动启动，运行时也可临时增删。
-//! 转发属于连接，同一主机的会话共用；连接断开后全部失效，重新连上时只恢复主机配置的规则。
+//! 转发属于连接，同一主机的会话共用；连接断开后全部失效，重新连上时恢复主机配置的规则
+//! 与断开前仍在运行的临时规则。
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -67,6 +68,16 @@ async fn open(link: &Link, rule: &ForwardRule) -> Result<scell_ssh::Forward, Str
         (_, None) => return Err(rust_i18n::t!("forward.bad_target").into()),
     };
     result.map_err(|e| e.to_string())
+}
+
+/// 运行中的临时规则，连接断开后由会话带到新连接上重新启动。
+pub(crate) fn runtime_rules(link: &Link) -> Vec<ForwardRule> {
+    link.forwards
+        .lock()
+        .iter()
+        .filter(|f| !f.from_host && f.state.is_ok())
+        .map(|f| f.rule.clone())
+        .collect()
 }
 
 /// 停止并移除；释放句柄即停止监听。
