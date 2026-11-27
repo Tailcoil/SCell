@@ -290,6 +290,15 @@ impl BaseDialogRoot {
     }
 }
 
+impl Styled for BaseDialogRoot {
+    fn style(&mut self) -> &mut StyleRefinement {
+        match self {
+            Self::Dialog(root) => root.style(),
+            Self::AlertDialog(root) => root.style(),
+        }
+    }
+}
+
 impl IntoElement for BaseDialogRoot {
     type Element = <gpui_base::Dialog as IntoElement>::Element;
     fn into_element(self) -> Self::Element {
@@ -718,7 +727,6 @@ impl RenderOnce for Dialog {
 
         // SCell 补丁：遮罩与淡出层四角随窗口圆角，原版为直角，会盖住窗口圆角外的透明区域
         let radii = crate::window_corner_radii(window, cx);
-        let insets = crate::window_border::window_content_insets(window);
 
         anchored()
             .position(point(window_paddings.left, window_paddings.top))
@@ -749,20 +757,22 @@ impl RenderOnce for Dialog {
                             .take()
                             .expect("Dialog base host is always present")
                             .layer(self.id, is_topmost)
+                            // Base anchors the host to the whole viewport, which includes the
+                            // client-decoration shadow inset; keep it and its backdrop inside
+                            // the visible window frame.
+                            .top(window_paddings.top)
+                            .left(window_paddings.left)
+                            .w(view_size.width)
+                            .h(view_size.height)
                             .focus_handle(self.focus_handle.clone())
                             .close_on_escape(self.props.keyboard && !closing)
                             .close_on_backdrop_press(self.props.overlay_closable && !closing)
                             .dismiss_below_y(TITLE_BAR_HEIGHT)
                             .when(self.props.overlay && !closing, |this| {
                                 this.backdrop(
-                                    // SCell 补丁：遮罩按整个 surface 定位，原版铺满会盖到四周画阴影的透明边距上，
-                                    // 改为只盖住窗口框以内
                                     div()
                                         .absolute()
-                                        .top(insets.top)
-                                        .left(insets.left)
-                                        .right(insets.right)
-                                        .bottom(insets.bottom)
+                                        .size_full()
                                         .rounded_tl(radii.top_left)
                                         .rounded_tr(radii.top_right)
                                         .rounded_bl(radii.bottom_left)

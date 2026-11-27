@@ -24,7 +24,7 @@ scell-ui = { path = "crates/scell-ui" }
 scell-vfs = { path = "crates/scell-vfs" }
 
 # UI：gpui-kit 内部精确锁定 gpui-pre，升级需单独验证
-gpui-kit = "=0.10.0"
+gpui-kit = "=0.11.0"
 
 # 终端与会话
 alacritty_terminal = "0.26"
@@ -99,10 +99,10 @@ lto = false
 codegen-units = 16
 debug = "line-tables-only"
 
-# gpui-component 0.10.0 的补丁副本：对话框与侧弹窗的遮罩四角随窗口圆角（原版为直角）。
+# gpui-component 0.11.0 的补丁副本：对话框与侧弹窗的遮罩四角随窗口圆角（原版为直角）。
 # 改动处以“SCell 补丁”注释标出；升级 gpui-kit 时需要在新版上重做
 [patch.crates-io]
 gpui-component = { path = "patches/gpui-component" }
-# gpui-pre-wgpu 0.3.12 的补丁副本（Linux 文本系统）：可变字体按请求的字重排版与光栅化（原版总取默认实例，
+# gpui-pre-wgpu 0.3.14 的补丁副本（Linux 文本系统）：可变字体按请求的字重排版与光栅化（原版总取默认实例，
 # 粗体不生效），缺少斜体字面时错切模拟。改动集中在 src/cosmic_text_system.rs，以“SCell 补丁”注释标出
 gpui-pre-wgpu = { path = "patches/gpui-pre-wgpu" }
