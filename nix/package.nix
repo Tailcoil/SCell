@@ -7,6 +7,7 @@
   libxkbcommon,
   libxcb,
   wayland,
+  zstd,
   libGL,
   vulkan-loader,
 }:
@@ -50,6 +51,8 @@ rustPlatform.buildRustPackage {
     libxkbcommon
     libxcb
     wayland
+    # nixpkgs 设置了 ZSTD_SYS_USE_PKG_CONFIG，zstd-sys 改为链接系统库
+    zstd
   ];
 
   # 测试在 CI 里跑；其中一部分要启动本机 shell，不适合放进构建沙箱
