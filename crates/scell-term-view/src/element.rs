@@ -1,9 +1,9 @@
 use gpui_kit::{
     App, Bounds, CursorStyle, DispatchPhase, Element, ElementId, ElementInputHandler, Entity,
     FocusHandle, FontId, GlobalElementId, GlyphId, Hitbox, HitboxBehavior, Hsla,
-    InspectorElementId, IntoElement, LayoutId, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
-    PathBuilder, Pixels, Point, Rgba, ShapedLine, StrikethroughStyle, Style, TextAlign, TextRun,
-    UnderlineStyle, Window, fill, outline, point, px, relative, size,
+    InspectorElementId, LayoutId, MouseDownEvent, MouseMoveEvent, MouseUpEvent, PathBuilder,
+    Pixels, Point, Rgba, ShapedLine, StrikethroughStyle, Style, TextAlign, TextRun, UnderlineStyle,
+    Window, fill, outline, point, px, relative, size,
 };
 use scell_term::{CellAttrs, CursorShape, Rgb, SnapshotCell, TermSize};
 
@@ -78,14 +78,6 @@ fn hsla(c: Rgb) -> Hsla {
         a: 1.,
     }
     .into()
-}
-
-impl IntoElement for TerminalElement {
-    type Element = Self;
-
-    fn into_element(self) -> Self::Element {
-        self
-    }
 }
 
 impl Element for TerminalElement {
