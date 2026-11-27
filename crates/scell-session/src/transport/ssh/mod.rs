@@ -6,6 +6,7 @@
 
 mod auth;
 mod automation;
+mod params;
 
 use rust_i18n::t;
 use std::path::PathBuf;
@@ -14,10 +15,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use parking_lot::Mutex;
-use scell_config::hosts::{AuthPref, ForwardRule, HostProfile, Step};
+use scell_config::hosts::{ForwardRule, HostProfile, Step};
 use scell_ssh::{
-    AuthMethod, BoxFuture, ConnectParams, Connection, Endpoint, HostKeyStatus, HostKeyVerifier,
-    KnownHostsFile, PublicKey, ShellEvent,
+    BoxFuture, Connection, HostKeyStatus, HostKeyVerifier, KnownHostsFile, PublicKey, ShellEvent,
 };
 use scell_term::TermSize;
 use tokio::runtime::Handle;
@@ -33,6 +33,7 @@ use crate::{Encoding, SessionEvent};
 pub(crate) use auth::SecretCache;
 use auth::{Hop, HopPrompter};
 use automation::{ShellIo, StepOutcome, open_switched_sftp};
+use params::{connect_params, resolved_user};
 
 /// 要连接的主机，以及解析好的跳板链（最外层在前）。
 #[derive(Debug, Clone)]
@@ -556,13 +557,6 @@ fn lost_reason(link: &Link) -> String {
     }
 }
 
-fn resolved_user(host: &HostProfile) -> String {
-    host.user
-        .clone()
-        .or_else(scell_config::local_user)
-        .unwrap_or_default()
-}
-
 /// 逐跳建立连接，已在池中且仍有响应的直接复用。返回目标主机这一跳，以及它是否为复用的。
 async fn connect_chain(
     target: &SshTarget,
@@ -624,49 +618,6 @@ async fn connect_hop(
         secrets,
         switch_gate: tokio::sync::Mutex::new(()),
     }))
-}
-
-fn connect_params(host: &HostProfile, prompter: HopPrompter) -> ConnectParams {
-    // 取不到本机用户名时留空，由 connect_hop 在连接前报错，不拿猜测的用户名去试（会计入 fail2ban）
-    let user = resolved_user(host);
-    let auth = if host.auth.is_empty() {
-        default_auth()
-    } else {
-        host.auth
-            .iter()
-            .map(|a| match a {
-                AuthPref::Agent => AuthMethod::Agent,
-                AuthPref::Key { path } => AuthMethod::KeyFile {
-                    path: scell_config::expand_tilde(path),
-                    passphrase: None,
-                },
-                AuthPref::Password => AuthMethod::AskPassword,
-                AuthPref::KeyboardInteractive => AuthMethod::KeyboardInteractive,
-            })
-            .collect()
-    };
-    let mut params = ConnectParams::new(Endpoint::new(host.host.clone(), host.port), user, auth);
-    params.prompter = Some(Arc::new(prompter));
-    params
-}
-
-/// 与 OpenSSH 的默认顺序相同：agent、默认私钥、keyboard-interactive、密码。
-/// 服务器不接受的方法会被跳过，所以多数服务器上只会问一次。
-fn default_auth() -> Vec<AuthMethod> {
-    let mut auth = vec![AuthMethod::Agent];
-    if let Some(ssh) = std::env::home_dir().map(|h| h.join(".ssh")) {
-        for name in ["id_ed25519", "id_ecdsa", "id_rsa"] {
-            let path = ssh.join(name);
-            if path.exists() {
-                auth.push(AuthMethod::KeyFile {
-                    path,
-                    passphrase: None,
-                });
-            }
-        }
-    }
-    auth.extend([AuthMethod::KeyboardInteractive, AuthMethod::AskPassword]);
-    auth
 }
 
 /// 把 SSH 层的提问转成会话事件，等待 UI 回答。
